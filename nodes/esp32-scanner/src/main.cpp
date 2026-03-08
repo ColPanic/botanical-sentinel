@@ -35,7 +35,12 @@ static void scanWifi() {
         String ssid = WiFi.SSID(i);
         strncpy(wifiResults[i].ssid, ssid.c_str(), 32);
         wifiResults[i].ssid[32] = '\0';
-        memcpy(wifiResults[i].bssid, WiFi.BSSID(i), 6);
+        const uint8_t* bssid = WiFi.BSSID(i);
+        if (bssid != nullptr) {
+            memcpy(wifiResults[i].bssid, bssid, 6);
+        } else {
+            memset(wifiResults[i].bssid, 0, 6);
+        }
         wifiResults[i].rssi    = WiFi.RSSI(i);
         wifiResults[i].channel = static_cast<uint8_t>(WiFi.channel(i));
     }
