@@ -19,8 +19,8 @@ serves a web UI for device tagging and management.
 
 ```
 nodes/      ESP32 and Raspberry Pi node code
-server/     FastAPI backend + MQTT bridge
-web/        SvelteKit frontend
+server/     FastAPI backend + MQTT bridge  (planned)
+web/        SvelteKit frontend             (planned)
 docs/       Architecture and design docs
 ```
 

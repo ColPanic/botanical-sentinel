@@ -12,7 +12,9 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     strategy:
       matrix:
         node: [esp32-scanner]
@@ -22,16 +24,14 @@ jobs:
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: ~/.platformio
-          key: >-
-            pio-${{ matrix.node }}-
-            ${{ hashFiles(format('nodes/{0}/platformio.ini', matrix.node)) }}
+          key: pio-${{ matrix.node }}-${{ hashFiles(format('nodes/{0}/platformio.ini', matrix.node)) }}
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: '3.13'
 
       - name: Install PlatformIO
-        run: pip install platformio
+        run: pip install platformio==6.1.19
 
       - name: Build ${{ matrix.node }}
         run: pio run --project-dir nodes/${{ matrix.node }}

@@ -28,8 +28,8 @@ Requires Node 22.
 
 ```bash
 cd web
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ## Workflow
