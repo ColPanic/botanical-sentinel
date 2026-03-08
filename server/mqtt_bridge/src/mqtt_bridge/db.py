@@ -3,8 +3,19 @@ from __future__ import annotations
 import json
 
 import asyncpg
+from mac_vendor_lookup import MacLookup, VendorNotFoundError
 
 from mqtt_bridge.handler import ScanEvent
+
+_mac_lookup = MacLookup()
+
+
+def lookup_vendor(mac: str) -> str | None:
+    """Return OUI vendor string or None if not found."""
+    try:
+        return _mac_lookup.lookup(mac)
+    except (VendorNotFoundError, KeyError, ValueError):
+        return None
 
 
 async def upsert_node(
@@ -30,15 +41,17 @@ async def upsert_node(
 async def upsert_devices(pool: asyncpg.Pool, events: list[ScanEvent]) -> None:
     async with pool.acquire() as conn:
         for event in events:
+            vendor = lookup_vendor(event.mac)
             await conn.execute(
                 """
-                INSERT INTO devices (mac, device_type, first_seen, last_seen, tag)
-                VALUES ($1, $2, now(), now(), 'unknown')
+                INSERT INTO devices (mac, device_type, first_seen, last_seen, tag, vendor)
+                VALUES ($1, $2, now(), now(), 'unknown', $3)
                 ON CONFLICT (mac) DO UPDATE
                     SET last_seen = now()
                 """,
                 event.mac,
                 event.scan_type,
+                vendor,
             )
 
 

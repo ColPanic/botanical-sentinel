@@ -1,5 +1,6 @@
 import json
 
+from mqtt_bridge.db import lookup_vendor
 from mqtt_bridge.handler import extract_node_id, parse_ble, parse_wifi
 
 
@@ -64,3 +65,16 @@ def test_parse_ble_skips_empty_mac():
 
 def test_parse_ble_empty_list():
     assert parse_ble("scanner-01", b"[]") == []
+
+
+def test_lookup_vendor_known_mac():
+    # Apple OUI — should resolve to something non-empty
+    result = lookup_vendor("AC:DE:48:00:11:22")
+    assert result is not None
+    assert len(result) > 0
+
+
+def test_lookup_vendor_unknown_mac():
+    # Locally administered address — no OUI match
+    result = lookup_vendor("02:00:00:00:00:00")
+    assert result is None
