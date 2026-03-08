@@ -103,6 +103,92 @@ static void scanBle() {
     }
 }
 
+// ── Display render ────────────────────────────────────────────────────────────
+
+static void renderDisplay(uint32_t scanStartMs) {
+    tft.fillScreen(TFT_BLACK);
+
+    // ── Header ────────────────────────────────────────────────────────────────
+    char buf[40];
+
+    snprintf(buf, sizeof(buf), "WiFi(%u)", wifiCount);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawString(buf, 4, 4, 2);
+
+    snprintf(buf, sizeof(buf), "BLE(%u)", bleCount);
+    tft.setTextDatum(TR_DATUM);
+    tft.drawString(buf, 316, 4, 2);
+
+    tft.drawFastHLine(0, 20, 320, TFT_DARKGREY);
+
+    // ── WiFi list ─────────────────────────────────────────────────────────────
+    tft.setTextDatum(TL_DATUM);
+    static constexpr uint8_t WIFI_ROWS = 8;
+    uint8_t wRows = wifiCount < WIFI_ROWS ? wifiCount : WIFI_ROWS;
+
+    for (uint8_t i = 0; i < wRows; i++) {
+        int16_t y = 22 + i * 16;
+
+        // SSID — truncate at 20 chars
+        const char* raw = wifiResults[i].ssid[0]
+            ? wifiResults[i].ssid : "[hidden]";
+        char ssidBuf[21];
+        strncpy(ssidBuf, raw, 20);
+        ssidBuf[20] = '\0';
+
+        tft.setTextColor(TFT_CYAN, TFT_BLACK);
+        tft.drawString(ssidBuf, 4, y, 2);
+
+        // RSSI + channel — right-aligned
+        snprintf(buf, sizeof(buf), "%ddBm ch%u",
+            wifiResults[i].rssi, wifiResults[i].channel);
+        tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+        tft.setTextDatum(TR_DATUM);
+        tft.drawString(buf, 316, y, 2);
+        tft.setTextDatum(TL_DATUM);
+    }
+
+    if (wifiCount > WIFI_ROWS) {
+        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.drawString("...", 4, 22 + WIFI_ROWS * 16, 2);
+    }
+
+    tft.drawFastHLine(0, 150, 320, TFT_DARKGREY);
+
+    // ── BLE list ──────────────────────────────────────────────────────────────
+    static constexpr uint8_t BLE_ROWS = 4;
+    uint8_t bRows = bleCount < BLE_ROWS ? bleCount : BLE_ROWS;
+
+    for (uint8_t i = 0; i < bRows; i++) {
+        int16_t y = 152 + i * 16;
+
+        const char* raw = bleResults[i].name[0]
+            ? bleResults[i].name : bleResults[i].mac;
+        char nameBuf[21];
+        strncpy(nameBuf, raw, 20);
+        nameBuf[20] = '\0';
+
+        tft.setTextColor(TFT_GREEN, TFT_BLACK);
+        tft.drawString(nameBuf, 4, y, 2);
+
+        snprintf(buf, sizeof(buf), "%ddBm", bleResults[i].rssi);
+        tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+        tft.setTextDatum(TR_DATUM);
+        tft.drawString(buf, 316, y, 2);
+        tft.setTextDatum(TL_DATUM);
+    }
+
+    tft.drawFastHLine(0, 222, 320, TFT_DARKGREY);
+
+    // ── Footer ────────────────────────────────────────────────────────────────
+    uint32_t elapsedSec = (millis() - scanStartMs) / 1000;
+    snprintf(buf, sizeof(buf), "Scan #%lu   %lus ago",
+        scanCount, static_cast<unsigned long>(elapsedSec));
+    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    tft.drawString(buf, 4, 225, 2);
+}
+
 // ── Arduino entry points ──────────────────────────────────────────────────────
 
 void setup() {
@@ -125,10 +211,18 @@ void loop() {
     static uint32_t lastScan = static_cast<uint32_t>(0) - SCAN_INTERVAL_MS;
 
     if (millis() - lastScan >= SCAN_INTERVAL_MS) {
+        // Show "Scanning..." splash while working
+        tft.fillScreen(TFT_BLACK);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(TFT_WHITE, TFT_BLACK);
+        tft.drawString("Scanning...", 160, 120, 4);
+
         lastScan = millis();
         scanCount++;
         Serial.printf("\n--- Scan #%lu ---\n", scanCount);
+
         scanWifi();
         scanBle();
+        renderDisplay(lastScan);
     }
 }
