@@ -25,3 +25,8 @@ async def get_pool(request: Request) -> asyncpg.Pool:
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+from api.routers import nodes as nodes_router  # noqa: E402
+
+app.include_router(nodes_router.router)
