@@ -53,13 +53,14 @@ def parse_ble(node_id: str, payload: bytes) -> list[ScanEvent]:
         mac = item.get("mac", "").strip().upper()
         if not mac:
             continue
+        name = item.get("name", "").strip() or None
         events.append(
             ScanEvent(
                 node_id=node_id,
                 mac=mac,
                 rssi=int(item["rssi"]),
                 scan_type="ble",
-                ssid=None,
+                ssid=name,
                 time=now,
             )
         )
