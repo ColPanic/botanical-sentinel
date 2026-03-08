@@ -46,7 +46,13 @@ web/                     — SvelteKit frontend (future)
 
 ```bash
 # Enter bootloader: hold BOOT, press+release RESET, release BOOT
-pio run --project-dir nodes/esp32-scanner -t upload --upload-port /dev/cu.usbmodem2101
+
+# Headless (no display)
+pio run --project-dir nodes/esp32-scanner -e esp32-s3-devkitc-1-headless -t upload --upload-port /dev/cu.usbmodem2101
+
+# With TFT display
+pio run --project-dir nodes/esp32-scanner -e esp32-s3-devkitc-1-tft -t upload --upload-port /dev/cu.usbmodem2101
+
 pio device monitor --project-dir nodes/esp32-scanner
 ```
 
