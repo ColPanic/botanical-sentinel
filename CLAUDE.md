@@ -1,4 +1,4 @@
-# esp_bot — ESP32-S3 TFT Display Project
+# botanical-sentinel — ESP32-S3 TFT Display Project
 
 ## Hardware
 

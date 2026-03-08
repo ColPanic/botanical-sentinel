@@ -194,7 +194,7 @@ static void renderDisplay(uint32_t scanStartMs) {
 void setup() {
     Serial.begin(115200);
     delay(1000);
-    Serial.println("=== esp_bot scanner node ===");
+    Serial.println("=== botanical-sentinel scanner node ===");
 
     tft.init();
     tft.setRotation(1);   // landscape: 320x240, USB connector on right

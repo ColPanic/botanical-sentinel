@@ -1,4 +1,4 @@
-# esp_bot
+# botanical-sentinel
 
 Open-source IoT security and surveillance system for remote properties.
 
