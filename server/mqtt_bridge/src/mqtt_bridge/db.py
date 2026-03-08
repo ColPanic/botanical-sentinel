@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import asyncpg
 
 from mqtt_bridge.handler import ScanEvent
@@ -54,3 +56,9 @@ async def insert_scan_events(pool: asyncpg.Pool, events: list[ScanEvent]) -> Non
                 for e in events
             ],
         )
+        payload = json.dumps({
+            "node_id": events[0].node_id,
+            "scan_type": events[0].scan_type,
+            "count": len(events),
+        })
+        await conn.execute("SELECT pg_notify('scan_events', $1)", payload)
