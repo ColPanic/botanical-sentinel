@@ -21,7 +21,8 @@ async def _broadcast(message: str) -> None:
     for ws in _connections:
         try:
             await ws.send_text(message)
-        except Exception:
+        except Exception as exc:
+            log.debug("WebSocket send failed, removing dead connection: %s", exc)
             dead.add(ws)
     _connections.difference_update(dead)
 
@@ -38,12 +39,10 @@ async def _listen_loop() -> None:
 
             await conn.add_listener("scan_events", on_notify)
 
-            # Keep alive until connection drops
+            # Poll for connection loss — notifications arrive via asyncpg's callback,
+            # not via this loop.
             while not conn.is_closed():
                 await asyncio.sleep(5)
-
-            await conn.remove_listener("scan_events", on_notify)
-            await conn.close()
         except Exception as exc:
             log.warning("LISTEN loop error: %s — reconnecting in 5s", exc)
             await asyncio.sleep(5)
