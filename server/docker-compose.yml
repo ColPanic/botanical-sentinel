@@ -39,6 +39,17 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  api:
+    build: ./api
+    environment:
+      DB_URL: postgresql://botanical:${DB_PASSWORD}@timescaledb:5432/botanical
+    ports:
+      - "8000:8000"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   mosquitto_data:
   timescaledb_data:

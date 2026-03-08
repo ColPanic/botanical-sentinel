@@ -31,14 +31,16 @@ def parse_wifi(node_id: str, payload: bytes) -> list[ScanEvent]:
         if not bssid:
             continue
         ssid = item.get("ssid") or None
-        events.append(ScanEvent(
-            node_id=node_id,
-            mac=bssid,
-            rssi=int(item["rssi"]),
-            scan_type="wifi",
-            ssid=ssid,
-            time=now,
-        ))
+        events.append(
+            ScanEvent(
+                node_id=node_id,
+                mac=bssid,
+                rssi=int(item["rssi"]),
+                scan_type="wifi",
+                ssid=ssid,
+                time=now,
+            )
+        )
     return events
 
 
@@ -51,12 +53,14 @@ def parse_ble(node_id: str, payload: bytes) -> list[ScanEvent]:
         mac = item.get("mac", "").strip().upper()
         if not mac:
             continue
-        events.append(ScanEvent(
-            node_id=node_id,
-            mac=mac,
-            rssi=int(item["rssi"]),
-            scan_type="ble",
-            ssid=None,
-            time=now,
-        ))
+        events.append(
+            ScanEvent(
+                node_id=node_id,
+                mac=mac,
+                rssi=int(item["rssi"]),
+                scan_type="ble",
+                ssid=None,
+                time=now,
+            )
+        )
     return events
