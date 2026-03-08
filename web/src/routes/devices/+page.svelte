@@ -42,8 +42,8 @@
       {#each data.devices as device}
         <tr class="border-b border-zinc-800">
           <td class="py-2 pr-4">
-            {#if device.label}
-              <span class="text-sm">{device.label}</span>
+            {#if device.label || device.ssid}
+              <span class="text-sm">{device.label ?? device.ssid}</span>
               <span class="block font-mono text-xs text-zinc-500">{device.mac}</span>
             {:else}
               <span class="font-mono text-xs">{device.mac}</span>

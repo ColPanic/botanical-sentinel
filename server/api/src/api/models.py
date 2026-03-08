@@ -21,6 +21,7 @@ class DeviceResponse(BaseModel):
     first_seen: datetime
     last_seen: datetime
     vendor: str | None
+    ssid: str | None
 
 
 class ScanEventResponse(BaseModel):

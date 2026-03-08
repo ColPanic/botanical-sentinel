@@ -44,12 +44,12 @@ async def upsert_devices(pool: asyncpg.Pool, events: list[ScanEvent]) -> None:
             vendor = lookup_vendor(event.mac)
             await conn.execute(
                 """
-                INSERT INTO devices (mac, device_type, first_seen, last_seen, tag, vendor, label)
+                INSERT INTO devices (mac, device_type, first_seen, last_seen, tag, vendor, ssid)
                 VALUES ($1, $2, now(), now(), 'unknown', $3, $4)
                 ON CONFLICT (mac) DO UPDATE
                     SET last_seen = now(),
                         vendor    = COALESCE(devices.vendor, EXCLUDED.vendor),
-                        label     = COALESCE(devices.label, EXCLUDED.label)
+                        ssid      = COALESCE(EXCLUDED.ssid, devices.ssid)
                 """,
                 event.mac,
                 event.scan_type,

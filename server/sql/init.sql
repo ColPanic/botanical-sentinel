@@ -15,8 +15,12 @@ CREATE TABLE IF NOT EXISTS devices (
     tag         TEXT        NOT NULL DEFAULT 'unknown',
     first_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    vendor      TEXT
+    vendor      TEXT,
+    ssid        TEXT
 );
+
+-- Idempotent migration for existing databases
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS ssid TEXT;
 
 CREATE TABLE IF NOT EXISTS scan_events (
     time      TIMESTAMPTZ NOT NULL,
