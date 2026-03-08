@@ -44,8 +44,7 @@ def test_get_recent_default_limit_is_100(client_scan):
     client, conn = client_scan
     client.get("/scan/recent")
     call_args = conn.fetch.call_args
-    kwargs_vals = (call_args.kwargs or {}).values()
-    assert "100" in str(call_args) or 100 in call_args.args or 100 in kwargs_vals
+    assert call_args.args[1] == 100
 
 
 def test_get_recent_for_node(client_scan):
@@ -56,6 +55,7 @@ def test_get_recent_for_node(client_scan):
 
 
 def test_get_recent_custom_limit(client_scan):
-    client, _ = client_scan
+    client, conn = client_scan
     response = client.get("/scan/recent?limit=50")
     assert response.status_code == 200
+    assert conn.fetch.call_args.args[1] == 50
