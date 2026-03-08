@@ -4,6 +4,7 @@
 # PlatformIO
 nodes/**/.pio/
 .pio/
+nodes/**/config.h
 
 # Python
 __pycache__/
