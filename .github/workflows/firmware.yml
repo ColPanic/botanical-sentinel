@@ -1,0 +1,37 @@
+name: Firmware
+
+on:
+  pull_request:
+    paths:
+      - 'nodes/esp32-**/**'
+      - '.github/workflows/firmware.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'nodes/esp32-**/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [esp32-scanner]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: >-
+            pio-${{ matrix.node }}-
+            ${{ hashFiles(format('nodes/{0}/platformio.ini', matrix.node)) }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build ${{ matrix.node }}
+        run: pio run --project-dir nodes/${{ matrix.node }}
