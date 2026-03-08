@@ -10,9 +10,7 @@ router = APIRouter(prefix="/devices", tags=["devices"])
 
 VALID_TAGS = {"known_resident", "known_vehicle", "unknown", "ignored"}
 
-_DEVICES_SELECT = (
-    "SELECT mac, device_type, label, tag, first_seen, last_seen, vendor FROM devices"
-)
+_DEVICES_SELECT = "SELECT mac, device_type, label, tag, first_seen, last_seen, vendor FROM devices"
 
 
 @router.get("", response_model=list[DeviceResponse])

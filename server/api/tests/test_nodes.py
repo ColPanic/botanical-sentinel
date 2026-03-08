@@ -12,15 +12,17 @@ NOW = datetime(2026, 3, 8, 12, 0, 0, tzinfo=UTC)
 
 @pytest.fixture
 def client_with_nodes():
-    pool, conn = make_mock_pool(rows=[
-        {
-            "node_id": "scanner-01",
-            "node_type": "esp32_scanner",
-            "location": None,
-            "last_seen": NOW,
-            "firmware_ver": "0.2.0",
-        }
-    ])
+    pool, conn = make_mock_pool(
+        rows=[
+            {
+                "node_id": "scanner-01",
+                "node_type": "esp32_scanner",
+                "location": None,
+                "last_seen": NOW,
+                "firmware_ver": "0.2.0",
+            }
+        ]
+    )
     app.dependency_overrides[get_pool] = lambda: pool
     with patch("api.app.asyncpg.create_pool", new=AsyncMock(return_value=pool)):
         with TestClient(app) as c:

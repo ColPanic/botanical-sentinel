@@ -55,6 +55,6 @@ async def live(ws: WebSocket):
     _connections.add(ws)
     try:
         while True:
-            await ws.receive_text()   # keep connection open; client sends nothing
+            await ws.receive_text()  # keep connection open; client sends nothing
     except WebSocketDisconnect:
         _connections.discard(ws)

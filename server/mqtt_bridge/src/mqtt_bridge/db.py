@@ -64,14 +64,13 @@ async def insert_scan_events(pool: asyncpg.Pool, events: list[ScanEvent]) -> Non
             INSERT INTO scan_events (time, node_id, mac, rssi, scan_type, ssid)
             VALUES ($1, $2, $3, $4, $5, $6)
             """,
-            [
-                (e.time, e.node_id, e.mac, e.rssi, e.scan_type, e.ssid)
-                for e in events
-            ],
+            [(e.time, e.node_id, e.mac, e.rssi, e.scan_type, e.ssid) for e in events],
         )
-        payload = json.dumps({
-            "node_id": events[0].node_id,
-            "scan_type": events[0].scan_type,
-            "count": len(events),
-        })
+        payload = json.dumps(
+            {
+                "node_id": events[0].node_id,
+                "scan_type": events[0].scan_type,
+                "count": len(events),
+            }
+        )
         await conn.execute("SELECT pg_notify('scan_events', $1)", payload)
