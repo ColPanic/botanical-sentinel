@@ -1,65 +1,80 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
+#include <WiFi.h>
 
-TFT_eSPI tft = TFT_eSPI();
+// ── Constants ────────────────────────────────────────────────────────────────
 
-// Cycle through these colors in loop()
-static const uint16_t COLORS[] = {
-    TFT_RED, TFT_GREEN, TFT_BLUE,
-    TFT_YELLOW, TFT_CYAN, TFT_MAGENTA
+static constexpr uint32_t SCAN_INTERVAL_MS = 30000;
+static constexpr uint8_t  MAX_WIFI         = 20;
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+struct WifiResult {
+    char    ssid[33];   // 32 chars + null terminator
+    uint8_t bssid[6];
+    int32_t rssi;
+    uint8_t channel;
 };
-static const char* COLOR_NAMES[] = {
-    "RED", "GREEN", "BLUE",
-    "YELLOW", "CYAN", "MAGENTA"
-};
-static const uint8_t NUM_COLORS = 6;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+static TFT_eSPI tft;
+static WifiResult wifiResults[MAX_WIFI];
+static uint8_t    wifiCount  = 0;
+static uint32_t   scanCount  = 0;
+
+// ── WiFi scan ─────────────────────────────────────────────────────────────────
+
+static void scanWifi() {
+    int found = WiFi.scanNetworks(/*async=*/false, /*show_hidden=*/true);
+    if (found < 0) found = 0;
+
+    wifiCount = static_cast<uint8_t>(found > MAX_WIFI ? MAX_WIFI : found);
+
+    for (uint8_t i = 0; i < wifiCount; i++) {
+        String ssid = WiFi.SSID(i);
+        strncpy(wifiResults[i].ssid, ssid.c_str(), 32);
+        wifiResults[i].ssid[32] = '\0';
+        memcpy(wifiResults[i].bssid, WiFi.BSSID(i), 6);
+        wifiResults[i].rssi    = WiFi.RSSI(i);
+        wifiResults[i].channel = static_cast<uint8_t>(WiFi.channel(i));
+    }
+
+    WiFi.scanDelete();
+
+    Serial.printf("[WiFi] %u networks\n", wifiCount);
+    for (uint8_t i = 0; i < wifiCount; i++) {
+        const char* ssid = wifiResults[i].ssid[0]
+            ? wifiResults[i].ssid : "[hidden]";
+        Serial.printf("  %-32s  %4d dBm  ch%u\n",
+            ssid, wifiResults[i].rssi, wifiResults[i].channel);
+    }
+}
+
+// ── Arduino entry points ──────────────────────────────────────────────────────
 
 void setup() {
     Serial.begin(115200);
     delay(1000);
-    Serial.println("=== ESP32-S3 TFT Display Test ===");
+    Serial.println("=== esp_bot scanner node ===");
 
     tft.init();
-    tft.setRotation(1);  // landscape, USB connector on right
-    tft.fillScreen(TFT_BLACK);
-    Serial.println("TFT initialized OK");
-
-    // --- Color fill tests ---
-    for (uint8_t i = 0; i < NUM_COLORS; i++) {
-        tft.fillScreen(COLORS[i]);
-        Serial.printf("Fill: %s\n", COLOR_NAMES[i]);
-        delay(600);
-    }
-
-    // --- Hello World ---
+    tft.setRotation(1);   // landscape: 320x240, USB connector on right
     tft.fillScreen(TFT_BLACK);
 
-    tft.setTextDatum(MC_DATUM);  // middle-center
-
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.setTextSize(1);
-    tft.drawString("Hello ESP32-S3!", tft.width() / 2, tft.height() / 2 - 20, 4);
-
-    tft.setTextColor(TFT_GREEN, TFT_BLACK);
-    tft.drawString("TFT_eSPI OK", tft.width() / 2, tft.height() / 2 + 20, 4);
-
-    Serial.println("Hello World displayed — setup complete");
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect();
 }
 
 void loop() {
-    static uint32_t lastSwap = 0;
-    static uint8_t idx = 0;
+    // Subtract SCAN_INTERVAL_MS from 0 (uint32_t underflow) so the first
+    // scan fires immediately without a 30-second wait on boot.
+    static uint32_t lastScan = static_cast<uint32_t>(0) - SCAN_INTERVAL_MS;
 
-    if (millis() - lastSwap > 2000) {
-        lastSwap = millis();
-
-        tft.fillScreen(COLORS[idx]);
-
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_WHITE);
-        tft.drawString(COLOR_NAMES[idx], tft.width() / 2, tft.height() / 2, 4);
-
-        Serial.printf("Cycling: %s\n", COLOR_NAMES[idx]);
-        idx = (idx + 1) % NUM_COLORS;
+    if (millis() - lastScan >= SCAN_INTERVAL_MS) {
+        lastScan = millis();
+        scanCount++;
+        Serial.printf("\n--- Scan #%lu ---\n", scanCount);
+        scanWifi();
     }
 }
