@@ -43,7 +43,12 @@ export async function setDeviceTag(mac: string, tag: string) {
 }
 
 export function liveWebSocket(onMessage: (data: unknown) => void): WebSocket {
-  const ws = new WebSocket(`${BASE.replace("http", "ws")}/live`);
+  // When PUBLIC_API_URL is set, connect directly to the API host.
+  // Otherwise use a relative URL so Vite's proxy (or any reverse proxy) routes it.
+  const wsUrl = env.PUBLIC_API_URL
+    ? `${env.PUBLIC_API_URL.replace(/^http/, "ws")}/live`
+    : `${location.protocol.replace("http", "ws")}//${location.host}/live`;
+  const ws = new WebSocket(wsUrl);
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   return ws;
 }

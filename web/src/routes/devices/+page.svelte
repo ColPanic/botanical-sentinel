@@ -30,7 +30,7 @@
   <table class="w-full text-sm border-collapse">
     <thead>
       <tr class="text-left border-b border-zinc-700">
-        <th class="py-2 pr-4">MAC</th>
+        <th class="py-2 pr-4">Device</th>
         <th class="py-2 pr-4">Vendor</th>
         <th class="py-2 pr-4">Type</th>
         <th class="py-2 pr-4">Label</th>
@@ -41,7 +41,14 @@
     <tbody>
       {#each data.devices as device}
         <tr class="border-b border-zinc-800">
-          <td class="py-2 pr-4 font-mono text-xs">{device.mac}</td>
+          <td class="py-2 pr-4">
+            {#if device.label}
+              <span class="text-sm">{device.label}</span>
+              <span class="block font-mono text-xs text-zinc-500">{device.mac}</span>
+            {:else}
+              <span class="font-mono text-xs">{device.mac}</span>
+            {/if}
+          </td>
           <td class="py-2 pr-4 text-zinc-400 text-xs">{device.vendor ?? "—"}</td>
           <td class="py-2 pr-4 text-zinc-400">{device.device_type}</td>
 
