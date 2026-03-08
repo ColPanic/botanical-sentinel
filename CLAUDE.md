@@ -25,8 +25,15 @@ SD card MOSI/MISO/SCK share the SPI bus (GPIO 11/12/13).
 
 ## Project Structure
 
-- `platformio.ini` — PlatformIO config (ESP32-S3 devkitc-1, Arduino framework)
-- `src/main.cpp` — TFT test sketch
+```
+nodes/esp32-scanner/     — ESP32-S3 scanner node (WiFi+BLE scan + TFT display)
+  platformio.ini         — PlatformIO config (ESP32-S3 devkitc-1, Arduino framework)
+  src/main.cpp           — Scanner sketch
+nodes/pi-camera/         — Raspberry Pi camera node (future)
+nodes/pi-lora-gateway/   — Raspberry Pi LoRa gateway (future)
+server/                  — FastAPI backend + MQTT bridge (future)
+web/                     — SvelteKit frontend (future)
+```
 
 ## Key Decisions
 
@@ -38,7 +45,9 @@ SD card MOSI/MISO/SCK share the SPI bus (GPIO 11/12/13).
 ## Build & Flash
 
 ```bash
-pio run -t upload && pio device monitor
+# Enter bootloader: hold BOOT, press+release RESET, release BOOT
+pio run --project-dir nodes/esp32-scanner -t upload --upload-port /dev/cu.usbmodem2101
+pio device monitor --project-dir nodes/esp32-scanner
 ```
 
 ## Status
