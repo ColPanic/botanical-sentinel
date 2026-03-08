@@ -1,0 +1,44 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+    restart: unless-stopped
+
+  timescaledb:
+    image: timescale/timescaledb-ha:pg17
+    environment:
+      POSTGRES_USER: botanical
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: botanical
+    volumes:
+      - timescaledb_data:/home/postgres/pgdata/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U botanical"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mqtt_bridge:
+    build: ./mqtt_bridge
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      DB_URL: postgresql://botanical:${DB_PASSWORD}@timescaledb:5432/botanical
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mosquitto_data:
+  timescaledb_data:
