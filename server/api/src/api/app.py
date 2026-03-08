@@ -28,6 +28,8 @@ async def health():
     return {"status": "ok"}
 
 
+from api.routers import devices as devices_router  # noqa: E402
 from api.routers import nodes as nodes_router  # noqa: E402
 
 app.include_router(nodes_router.router)
+app.include_router(devices_router.router)
