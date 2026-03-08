@@ -34,3 +34,12 @@ SELECT add_retention_policy(
     INTERVAL '90 days',
     if_not_exists => TRUE
 );
+
+CREATE TABLE IF NOT EXISTS commands (
+    id           SERIAL      PRIMARY KEY,
+    node_id      TEXT        NOT NULL,
+    command_type TEXT        NOT NULL,
+    payload      JSONB       NOT NULL DEFAULT '{}',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    executed_at  TIMESTAMPTZ
+);
