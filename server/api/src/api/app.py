@@ -19,6 +19,7 @@ app = FastAPI(title="botanical-sentinel API", version="0.1.0", lifespan=lifespan
 
 
 async def get_pool(request: Request) -> asyncpg.Pool:
+    """FastAPI dependency that returns the connection pool created by lifespan."""
     return request.app.state.pool
 
 
