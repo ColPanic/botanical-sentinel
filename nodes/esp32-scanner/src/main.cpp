@@ -1,11 +1,15 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <WiFi.h>
+#include <BLEAdvertisedDevice.h>
+#include <BLEDevice.h>
+#include <BLEScan.h>
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 static constexpr uint32_t SCAN_INTERVAL_MS = 30000;
 static constexpr uint8_t  MAX_WIFI         = 20;
+static constexpr uint8_t  MAX_BLE          = 20;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -16,12 +20,20 @@ struct WifiResult {
     uint8_t channel;
 };
 
+struct BleResult {
+    char    name[32];
+    char    mac[18];   // "AA:BB:CC:DD:EE:FF\0"
+    int32_t rssi;
+};
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 static TFT_eSPI tft;
 static WifiResult wifiResults[MAX_WIFI];
 static uint8_t    wifiCount  = 0;
 static uint32_t   scanCount  = 0;
+static BleResult  bleResults[MAX_BLE];
+static uint8_t    bleCount   = 0;
 
 // ── WiFi scan ─────────────────────────────────────────────────────────────────
 
@@ -56,6 +68,41 @@ static void scanWifi() {
     }
 }
 
+// ── BLE scan ──────────────────────────────────────────────────────────────────
+
+static void scanBle() {
+    BLEScan* pScan = BLEDevice::getScan();
+    pScan->setActiveScan(false);   // passive — never sends scan requests
+    pScan->setInterval(100);
+    pScan->setWindow(99);
+
+    BLEScanResults results = pScan->start(/*seconds=*/5, /*is_continue=*/false);
+    int found = results.getCount();
+
+    bleCount = static_cast<uint8_t>(found > MAX_BLE ? MAX_BLE : found);
+
+    for (uint8_t i = 0; i < bleCount; i++) {
+        BLEAdvertisedDevice dev = results.getDevice(i);
+
+        strncpy(bleResults[i].name, dev.getName().c_str(), 31);
+        bleResults[i].name[31] = '\0';
+
+        strncpy(bleResults[i].mac, dev.getAddress().toString().c_str(), 17);
+        bleResults[i].mac[17] = '\0';
+
+        bleResults[i].rssi = dev.getRSSI();
+    }
+
+    pScan->clearResults();
+
+    Serial.printf("[BLE] %u devices\n", bleCount);
+    for (uint8_t i = 0; i < bleCount; i++) {
+        const char* label = bleResults[i].name[0]
+            ? bleResults[i].name : bleResults[i].mac;
+        Serial.printf("  %-31s  %4d dBm\n", label, bleResults[i].rssi);
+    }
+}
+
 // ── Arduino entry points ──────────────────────────────────────────────────────
 
 void setup() {
@@ -69,6 +116,7 @@ void setup() {
 
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
+    BLEDevice::init("");
 }
 
 void loop() {
@@ -81,5 +129,6 @@ void loop() {
         scanCount++;
         Serial.printf("\n--- Scan #%lu ---\n", scanCount);
         scanWifi();
+        scanBle();
     }
 }
