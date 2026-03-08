@@ -50,6 +50,17 @@ pio run --project-dir nodes/esp32-scanner -t upload --upload-port /dev/cu.usbmod
 pio device monitor --project-dir nodes/esp32-scanner
 ```
 
+## Server Stack
+
+```bash
+cd server
+cp .env.example .env   # fill in DB_PASSWORD
+docker compose up -d
+```
+
+Services: Mosquitto (1883), TimescaleDB (5432), mqtt_bridge (subscriber).
+Schema applied automatically from `sql/init.sql` on first TimescaleDB start.
+
 ## Status
 
 - [ ] Hardware wiring (use wiring diagram above)
