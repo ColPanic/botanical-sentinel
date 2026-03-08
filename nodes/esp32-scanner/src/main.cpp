@@ -4,7 +4,9 @@
 #include <BLEDevice.h>
 #include <BLEScan.h>
 #include <PubSubClient.h>
+#ifdef HAS_TFT
 #include <TFT_eSPI.h>
+#endif
 #include <WiFi.h>
 #include <WiFiClient.h>
 
@@ -33,7 +35,9 @@ struct BleResult {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
+#ifdef HAS_TFT
 static TFT_eSPI tft;
+#endif
 static WifiResult wifiResults[MAX_WIFI];
 static uint8_t    wifiCount  = 0;
 static uint32_t   scanCount  = 0;
@@ -214,6 +218,7 @@ static void publishStatus() {
 // ── Display render ────────────────────────────────────────────────────────────
 
 static void renderDisplay(uint32_t scanStartMs) {
+#ifdef HAS_TFT
     tft.fillScreen(TFT_BLACK);
 
     // ── Header ────────────────────────────────────────────────────────────────
@@ -295,6 +300,9 @@ static void renderDisplay(uint32_t scanStartMs) {
         scanCount, static_cast<unsigned long>(elapsedSec));
     tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
     tft.drawString(buf, 4, 225, 2);
+#else
+    (void)scanStartMs;
+#endif
 }
 
 // ── Arduino entry points ──────────────────────────────────────────────────────
@@ -304,9 +312,11 @@ void setup() {
     delay(1000);
     Serial.println("=== botanical-sentinel scanner node ===");
 
+#ifdef HAS_TFT
     tft.init();
     tft.setRotation(1);
     tft.fillScreen(TFT_BLACK);
+#endif
 
     // Build topic strings once
     snprintf(topicWifi,   sizeof(topicWifi),   "nodes/%s/scan/wifi", NODE_ID);
@@ -340,10 +350,12 @@ void loop() {
     static uint32_t lastScan = static_cast<uint32_t>(0) - SCAN_INTERVAL_MS;
 
     if (millis() - lastScan >= SCAN_INTERVAL_MS) {
+#ifdef HAS_TFT
         tft.fillScreen(TFT_BLACK);
         tft.setTextDatum(MC_DATUM);
         tft.setTextColor(TFT_WHITE, TFT_BLACK);
         tft.drawString("Scanning...", 160, 120, 4);
+#endif
 
         lastScan = millis();
         scanCount++;
