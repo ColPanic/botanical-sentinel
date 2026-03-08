@@ -1,9 +1,14 @@
 #include <Arduino.h>
-#include <TFT_eSPI.h>
-#include <WiFi.h>
+#include <ArduinoJson.h>
 #include <BLEAdvertisedDevice.h>
 #include <BLEDevice.h>
 #include <BLEScan.h>
+#include <PubSubClient.h>
+#include <TFT_eSPI.h>
+#include <WiFi.h>
+#include <WiFiClient.h>
+
+#include "config.h"
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -34,6 +39,55 @@ static uint8_t    wifiCount  = 0;
 static uint32_t   scanCount  = 0;
 static BleResult  bleResults[MAX_BLE];
 static uint8_t    bleCount   = 0;
+
+// ── MQTT ──────────────────────────────────────────────────────────────────────
+
+static WiFiClient   wifiClient;
+static PubSubClient mqtt(wifiClient);
+
+// Topic strings built from NODE_ID at setup time
+static char topicWifi[64];
+static char topicBle[64];
+static char topicStatus[64];
+
+// Shared serialisation buffer — 4096 bytes, lives in global RAM
+static char mqttBuf[4096];
+
+// ── Connectivity ──────────────────────────────────────────────────────────────
+
+static void connectWifi() {
+    if (WiFi.status() == WL_CONNECTED) return;
+
+    Serial.printf("[WiFi] Connecting to %s", WIFI_SSID);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+    for (uint8_t attempts = 0;
+         WiFi.status() != WL_CONNECTED && attempts < 20;
+         attempts++) {
+        delay(500);
+        Serial.print(".");
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.printf("\n[WiFi] Connected. IP: %s\n",
+            WiFi.localIP().toString().c_str());
+    } else {
+        Serial.println("\n[WiFi] Failed — will retry next cycle");
+    }
+}
+
+static void connectMqtt() {
+    if (mqtt.connected()) return;
+
+    Serial.printf("[MQTT] Connecting to %s:%d as %s\n",
+        MQTT_HOST, MQTT_PORT, NODE_ID);
+
+    if (mqtt.connect(NODE_ID)) {
+        Serial.println("[MQTT] Connected");
+    } else {
+        Serial.printf("[MQTT] Failed, state=%d\n", mqtt.state());
+    }
+}
 
 // ── WiFi scan ─────────────────────────────────────────────────────────────────
 
@@ -101,6 +155,60 @@ static void scanBle() {
             ? bleResults[i].name : bleResults[i].mac;
         Serial.printf("  %-31s  %4d dBm\n", label, bleResults[i].rssi);
     }
+}
+
+// ── MQTT publish ──────────────────────────────────────────────────────────────
+
+static void publishWifi() {
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+
+    for (uint8_t i = 0; i < wifiCount; i++) {
+        JsonObject obj = arr.add<JsonObject>();
+        obj["ssid"] = wifiResults[i].ssid;
+
+        char bssid[18];
+        snprintf(bssid, sizeof(bssid),
+            "%02X:%02X:%02X:%02X:%02X:%02X",
+            wifiResults[i].bssid[0], wifiResults[i].bssid[1],
+            wifiResults[i].bssid[2], wifiResults[i].bssid[3],
+            wifiResults[i].bssid[4], wifiResults[i].bssid[5]);
+        obj["bssid"]   = bssid;
+        obj["rssi"]    = wifiResults[i].rssi;
+        obj["channel"] = wifiResults[i].channel;
+    }
+
+    serializeJson(doc, mqttBuf, sizeof(mqttBuf));
+    mqtt.publish(topicWifi, mqttBuf);
+    Serial.printf("[MQTT] → %s (%u entries)\n", topicWifi, wifiCount);
+}
+
+static void publishBle() {
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+
+    for (uint8_t i = 0; i < bleCount; i++) {
+        JsonObject obj = arr.add<JsonObject>();
+        obj["mac"]  = bleResults[i].mac;
+        obj["name"] = bleResults[i].name;
+        obj["rssi"] = bleResults[i].rssi;
+    }
+
+    serializeJson(doc, mqttBuf, sizeof(mqttBuf));
+    mqtt.publish(topicBle, mqttBuf);
+    Serial.printf("[MQTT] → %s (%u entries)\n", topicBle, bleCount);
+}
+
+static void publishStatus() {
+    JsonDocument doc;
+    doc["uptime_ms"]    = millis();
+    doc["free_heap"]    = ESP.getFreeHeap();
+    doc["ip"]           = WiFi.localIP().toString();
+    doc["firmware_ver"] = FIRMWARE_VER;
+
+    serializeJson(doc, mqttBuf, sizeof(mqttBuf));
+    mqtt.publish(topicStatus, mqttBuf);
+    Serial.printf("[MQTT] → %s\n", topicStatus);
 }
 
 // ── Display render ────────────────────────────────────────────────────────────
@@ -197,21 +305,41 @@ void setup() {
     Serial.println("=== botanical-sentinel scanner node ===");
 
     tft.init();
-    tft.setRotation(1);   // landscape: 320x240, USB connector on right
+    tft.setRotation(1);
     tft.fillScreen(TFT_BLACK);
 
+    // Build topic strings once
+    snprintf(topicWifi,   sizeof(topicWifi),   "nodes/%s/scan/wifi", NODE_ID);
+    snprintf(topicBle,    sizeof(topicBle),    "nodes/%s/scan/bt",   NODE_ID);
+    snprintf(topicStatus, sizeof(topicStatus), "nodes/%s/status",    NODE_ID);
+
     WiFi.mode(WIFI_STA);
-    WiFi.disconnect();
+    connectWifi();
+
+    mqtt.setServer(MQTT_HOST, MQTT_PORT);
+    connectMqtt();
+
+    if (mqtt.connected()) {
+        publishStatus();
+    }
+
     BLEDevice::init("");
 }
 
 void loop() {
-    // Subtract SCAN_INTERVAL_MS from 0 (uint32_t underflow) so the first
-    // scan fires immediately without a 30-second wait on boot.
+    // Maintain connections between scan cycles
+    if (WiFi.status() != WL_CONNECTED) {
+        connectWifi();
+    } else {
+        if (!mqtt.connected()) {
+            connectMqtt();
+        }
+        mqtt.loop();
+    }
+
     static uint32_t lastScan = static_cast<uint32_t>(0) - SCAN_INTERVAL_MS;
 
     if (millis() - lastScan >= SCAN_INTERVAL_MS) {
-        // Show "Scanning..." splash while working
         tft.fillScreen(TFT_BLACK);
         tft.setTextDatum(MC_DATUM);
         tft.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -224,5 +352,13 @@ void loop() {
         scanWifi();
         scanBle();
         renderDisplay(lastScan);
+
+        if (mqtt.connected()) {
+            publishWifi();
+            publishBle();
+            publishStatus();
+        } else {
+            Serial.println("[MQTT] Not connected — skipping publish");
+        }
     }
 }
