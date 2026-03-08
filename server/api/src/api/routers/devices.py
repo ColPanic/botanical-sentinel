@@ -10,6 +10,10 @@ router = APIRouter(prefix="/devices", tags=["devices"])
 
 VALID_TAGS = {"known_resident", "known_vehicle", "unknown", "ignored"}
 
+_DEVICES_SELECT = (
+    "SELECT mac, device_type, label, tag, first_seen, last_seen, vendor FROM devices"
+)
+
 
 @router.get("", response_model=list[DeviceResponse])
 async def list_devices(
@@ -20,14 +24,12 @@ async def list_devices(
     async with pool.acquire() as conn:
         if tag:
             rows = await conn.fetch(
-                "SELECT mac, device_type, label, tag, first_seen, last_seen, vendor "
-                "FROM devices WHERE tag = $1 ORDER BY last_seen DESC",
+                f"{_DEVICES_SELECT} WHERE tag = $1 ORDER BY last_seen DESC",
                 tag,
             )
         else:
             rows = await conn.fetch(
-                "SELECT mac, device_type, label, tag, first_seen, last_seen, vendor "
-                "FROM devices ORDER BY tag = 'unknown' DESC, last_seen DESC"
+                f"{_DEVICES_SELECT} ORDER BY tag = 'unknown' DESC, last_seen DESC"
             )
     return [dict(r) for r in rows]
 

@@ -24,10 +24,12 @@ DEVICE_ROW = {
 def client_devices():
     pool, conn = make_mock_pool(rows=[DEVICE_ROW])
     app.dependency_overrides[get_pool] = lambda: pool
-    with patch("api.app.asyncpg.create_pool", new=AsyncMock(return_value=pool)):
-        with TestClient(app) as c:
-            yield c, conn
-    app.dependency_overrides.clear()
+    try:
+        with patch("api.app.asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+            with TestClient(app) as c:
+                yield c, conn
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_get_devices_no_filter(client_devices):
