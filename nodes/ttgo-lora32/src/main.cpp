@@ -262,7 +262,7 @@ static void renderDisplay(uint32_t scanStartMs) {
     uint32_t elapsedSec = (millis() - scanStartMs) / 1000;
     snprintf(buf, sizeof(buf), "%lus ago",
         static_cast<unsigned long>(elapsedSec));
-    oled.setCursor(0, 56);
+    oled.setCursor(0, 59);
     oled.print(buf);
 
     oled.display();
