@@ -12,6 +12,30 @@
     known_vehicle: "text-blue-400",
     ignored: "text-zinc-500",
   };
+
+  type Device = (typeof data.devices)[0];
+
+  let sortKey = "last_seen";
+  let sortDir: "asc" | "desc" = "desc";
+
+  function toggleSort(key: string) {
+    if (sortKey === key) sortDir = sortDir === "asc" ? "desc" : "asc";
+    else { sortKey = key; sortDir = "asc"; }
+  }
+
+  function sortVal(d: Device, key: string): string | number {
+    if (key === "name") return (d.label ?? d.ssid ?? d.mac).toLowerCase();
+    const v = (d as Record<string, unknown>)[key];
+    if (key === "last_seen") return new Date(v as string).getTime();
+    return String(v ?? "").toLowerCase();
+  }
+
+  $: sorted = [...data.devices].sort((a, b) => {
+    const av = sortVal(a, sortKey);
+    const bv = sortVal(b, sortKey);
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return sortDir === "asc" ? cmp : -cmp;
+  });
 </script>
 
 <svelte:head><title>Devices — botanical-sentinel</title></svelte:head>
@@ -29,17 +53,18 @@
 
   <table class="w-full text-sm border-collapse">
     <thead>
-      <tr class="text-left border-b border-zinc-700">
-        <th class="py-2 pr-4">Device</th>
-        <th class="py-2 pr-4">Vendor</th>
-        <th class="py-2 pr-4">Type</th>
+      <tr class="text-left border-b border-zinc-700 select-none">
+        {#each [["name","Device"],["vendor","Vendor"],["device_type","Type"],["tag","Tag"],["last_seen","Last Seen"]] as [key, label]}
+          <th
+            class="py-2 pr-4 cursor-pointer hover:text-white whitespace-nowrap"
+            on:click={() => toggleSort(key)}
+          >{label}{#if sortKey === key}<span class="ml-1 text-zinc-400">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}</th>
+        {/each}
         <th class="py-2 pr-4">Label</th>
-        <th class="py-2 pr-4">Tag</th>
-        <th class="py-2">Last Seen</th>
       </tr>
     </thead>
     <tbody>
-      {#each data.devices as device}
+      {#each sorted as device}
         <tr class="border-b border-zinc-800">
           <td class="py-2 pr-4">
             {#if device.label || device.ssid}
