@@ -93,7 +93,11 @@
 
           <!-- Location -->
           <td class="py-2.5 pr-4 font-mono text-xs text-muted">
-            {node.location ?? <span class="text-dim">—</span>}
+            {#if node.location}
+              {node.location}
+            {:else}
+              <span class="text-dim">—</span>
+            {/if}
           </td>
 
           <!-- Firmware -->
