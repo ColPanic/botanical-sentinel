@@ -217,8 +217,55 @@ static void publishStatus() {
 
 static void renderDisplay(uint32_t scanStartMs) {
 #ifdef HAS_OLED
-    // See Task 4 — this stub lets the headless env compile cleanly
-    (void)scanStartMs;
+    oled.clearDisplay();
+    oled.setTextSize(1);
+    oled.setTextColor(SSD1306_WHITE);
+
+    // Header: "W:8 B:5 #4"
+    char buf[32];
+    snprintf(buf, sizeof(buf), "W:%u B:%u #%lu",
+        wifiCount, bleCount, static_cast<unsigned long>(scanCount));
+    oled.setCursor(0, 0);
+    oled.print(buf);
+
+    oled.drawFastHLine(0, 9, 128, SSD1306_WHITE);
+
+    // WiFi rows (up to 3)
+    uint8_t wRows = wifiCount < 3 ? wifiCount : 3;
+    for (uint8_t i = 0; i < wRows; i++) {
+        const char* raw = wifiResults[i].ssid[0]
+            ? wifiResults[i].ssid : "[hidden]";
+        char ssidBuf[13];
+        strncpy(ssidBuf, raw, 12);
+        ssidBuf[12] = '\0';
+        snprintf(buf, sizeof(buf), "%-12s%4d", ssidBuf, wifiResults[i].rssi);
+        oled.setCursor(0, 11 + i * 9);
+        oled.print(buf);
+    }
+
+    oled.drawFastHLine(0, 38, 128, SSD1306_WHITE);
+
+    // BLE rows (up to 2)
+    uint8_t bRows = bleCount < 2 ? bleCount : 2;
+    for (uint8_t i = 0; i < bRows; i++) {
+        const char* raw = bleResults[i].name[0]
+            ? bleResults[i].name : bleResults[i].mac;
+        char nameBuf[15];
+        strncpy(nameBuf, raw, 14);
+        nameBuf[14] = '\0';
+        snprintf(buf, sizeof(buf), "%-14s%4d", nameBuf, bleResults[i].rssi);
+        oled.setCursor(0, 40 + i * 9);
+        oled.print(buf);
+    }
+
+    // Footer: elapsed
+    uint32_t elapsedSec = (millis() - scanStartMs) / 1000;
+    snprintf(buf, sizeof(buf), "%lus ago",
+        static_cast<unsigned long>(elapsedSec));
+    oled.setCursor(0, 56);
+    oled.print(buf);
+
+    oled.display();
 #else
     (void)scanStartMs;
 #endif
