@@ -1,1 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:opsz,wght@9..40,300..600&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --color-bg:        #07090d;
+  --color-surface:   #0d1117;
+  --color-raised:    #161b22;
+  --color-line:      #21262d;
+  --color-bright:    #30363d;
+  --color-text:      #e6edf3;
+  --color-muted:     #8b949e;
+  --color-dim:       #484f58;
+  --color-accent:    #38bdf8;
+  --color-accent-bg: color-mix(in srgb, #38bdf8 10%, transparent);
+  --font-sans:    'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+  --font-display: 'Syne', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html { background-color: #07090d; }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::-webkit-scrollbar       { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--color-bg); }
+  ::-webkit-scrollbar-thumb { background: var(--color-bright); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
+}
+
+@layer components {
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    border-width: 1px;
+    border-style: solid;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .th {
+    padding-block: 0.6rem;
+    padding-right: 1rem;
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-dim);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: color 0.1s;
+  }
+  .th:hover { color: var(--color-muted); }
+  .th-static {
+    padding-block: 0.6rem;
+    padding-right: 1rem;
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-dim);
+    white-space: nowrap;
+  }
+
+  input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+    border-radius: 3px;
+  }
+}

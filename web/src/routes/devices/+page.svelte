@@ -1,18 +1,24 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
   import { invalidateAll } from "$app/navigation";
+  import { slide } from "svelte/transition";
   import type { PageData } from "./$types";
-  import { setDeviceLabel } from "$lib/api";
+  import { setDeviceLabel, setDeviceTag } from "$lib/api";
 
   export let data: PageData;
 
   const TAGS = ["unknown", "known_resident", "known_vehicle", "ignored"];
 
-  const TAG_COLOR: Record<string, string> = {
-    unknown: "text-yellow-400",
-    known_resident: "text-green-400",
-    known_vehicle: "text-blue-400",
-    ignored: "text-zinc-500",
+  const TAG_BADGE: Record<string, string> = {
+    unknown:        "text-amber-400 bg-amber-400/10 border-amber-400/20",
+    known_resident: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
+    known_vehicle:  "text-sky-400 bg-sky-400/10 border-sky-400/20",
+    ignored:        "text-zinc-500 bg-zinc-700/30 border-zinc-600/30",
+  };
+
+  const TYPE_BADGE: Record<string, string> = {
+    ble:  "text-violet-400 bg-violet-400/10 border-violet-400/20",
+    wifi: "text-sky-400 bg-sky-400/10 border-sky-400/20",
   };
 
   type Device = (typeof data.devices)[0];
@@ -45,7 +51,7 @@
 
   let selected = new Set<string>();
 
-  $: allSelected = sorted.length > 0 && sorted.every((d) => selected.has(d.mac));
+  $: allSelected  = sorted.length > 0 && sorted.every((d) => selected.has(d.mac));
   $: someSelected = !allSelected && sorted.some((d) => selected.has(d.mac));
 
   function toggleDevice(mac: string) {
@@ -58,135 +64,212 @@
     selected = allSelected ? new Set() : new Set(sorted.map((d) => d.mac));
   }
 
-  // ── Bulk label ────────────────────────────────────────────────────────────
+  // ── Bulk actions ──────────────────────────────────────────────────────────
 
   let bulkLabel = "";
-  let applying = false;
+  let bulkTag   = "";
+  let applying  = false;
+  let applyError = "";
 
-  async function applyBulkLabel() {
-    if (!bulkLabel.trim() || selected.size === 0) return;
+  async function applyBulk() {
+    if (selected.size === 0) return;
+    if (!bulkLabel.trim() && !bulkTag) return;
     applying = true;
-    await Promise.all([...selected].map((mac) => setDeviceLabel(mac, bulkLabel.trim())));
-    await invalidateAll();
-    selected = new Set();
-    bulkLabel = "";
-    applying = false;
+    applyError = "";
+    try {
+      const macs = [...selected];
+      const ops: Promise<unknown>[] = [];
+      if (bulkLabel.trim()) ops.push(...macs.map((mac) => setDeviceLabel(mac, bulkLabel.trim())));
+      if (bulkTag)           ops.push(...macs.map((mac) => setDeviceTag(mac, bulkTag)));
+      await Promise.all(ops);
+      await invalidateAll();
+      selected  = new Set();
+      bulkLabel = "";
+      bulkTag   = "";
+    } catch (e) {
+      applyError = e instanceof Error ? e.message : "Apply failed";
+    } finally {
+      applying = false;
+    }
+  }
+
+  $: bulkDisabled = applying || (!bulkLabel.trim() && !bulkTag);
+
+  function sortIcon(key: string) {
+    if (sortKey !== key) return "";
+    return sortDir === "asc" ? " ↑" : " ↓";
   }
 </script>
 
 <svelte:head><title>Devices — botanical-sentinel</title></svelte:head>
 
-<div class="p-6">
-  <div class="flex items-center gap-4 mb-4">
-    <h1 class="text-xl font-semibold">Devices</h1>
-    <div class="flex gap-2 text-sm">
-      <a href="/devices" class="px-2 py-1 rounded {!data.activeTag ? 'bg-zinc-700' : 'text-zinc-400 hover:text-white'}">All</a>
-      {#each TAGS as tag}
-        <a href="/devices?tag={tag}" class="px-2 py-1 rounded {data.activeTag === tag ? 'bg-zinc-700' : 'text-zinc-400 hover:text-white'}">{tag}</a>
-      {/each}
-    </div>
+<!-- Header row -->
+<div class="flex items-center gap-4 mb-5">
+  <h1 class="font-display text-lg font-bold tracking-widest uppercase text-text">Devices</h1>
+  <span class="text-dim font-mono text-xs">{data.devices.length} total</span>
+
+  <div class="flex gap-1 ml-2 flex-wrap">
+    <a
+      href="/devices"
+      class="px-2.5 py-1 rounded text-xs font-mono tracking-wide transition-colors
+             {!data.activeTag ? 'bg-accent/15 text-accent border border-accent/30' : 'text-muted hover:text-text border border-transparent'}"
+    >all</a>
+    {#each ["unknown","known_resident","known_vehicle","ignored"] as tag}
+      <a
+        href="/devices?tag={tag}"
+        class="px-2.5 py-1 rounded text-xs font-mono tracking-wide transition-colors
+               {data.activeTag === tag ? 'bg-accent/15 text-accent border border-accent/30' : 'text-muted hover:text-text border border-transparent'}"
+      >{tag}</a>
+    {/each}
   </div>
+</div>
 
-  {#if selected.size > 0}
-    <div class="flex items-center gap-3 mb-3 px-3 py-2 bg-zinc-800 rounded text-sm">
-      <span class="text-zinc-400">{selected.size} selected</span>
-      <input
-        type="text"
-        bind:value={bulkLabel}
-        placeholder="label for selected…"
-        class="bg-transparent border-b border-zinc-600 focus:border-zinc-300 outline-none text-sm w-48"
-        on:keydown={(e) => e.key === "Enter" && applyBulkLabel()}
-      />
-      <button
-        on:click={applyBulkLabel}
-        disabled={applying || !bulkLabel.trim()}
-        class="px-2 py-0.5 rounded bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed"
-      >{applying ? "Applying…" : "Apply"}</button>
-      <button
-        on:click={() => (selected = new Set())}
-        class="text-zinc-500 hover:text-white"
-      >Clear</button>
-    </div>
-  {/if}
+<!-- Bulk action bar -->
+{#if selected.size > 0}
+  <div
+    transition:slide={{ duration: 180 }}
+    class="flex flex-wrap items-center gap-3 mb-4 px-4 py-2.5 rounded-md"
+    style="background: rgba(56,189,248,0.05); border: 1px solid rgba(56,189,248,0.18);"
+  >
+    <span class="text-xs font-mono text-accent font-medium">{selected.size} selected</span>
 
+    <div class="h-3 w-px bg-line"></div>
+
+    <input
+      type="text"
+      bind:value={bulkLabel}
+      placeholder="set label…"
+      class="bg-transparent border-b border-bright focus:border-accent outline-none text-sm text-text placeholder:text-dim w-36 transition-colors"
+      on:keydown={(e) => e.key === "Enter" && applyBulk()}
+    />
+
+    <select
+      bind:value={bulkTag}
+      class="bg-raised border border-line rounded px-2 py-1 text-xs font-mono text-muted focus:border-accent outline-none transition-colors cursor-pointer"
+    >
+      <option value="">set tag…</option>
+      {#each TAGS as tag}<option value={tag}>{tag}</option>{/each}
+    </select>
+
+    <button
+      on:click={applyBulk}
+      disabled={bulkDisabled}
+      class="px-3 py-1 rounded text-xs font-mono font-medium transition-all
+             {bulkDisabled
+               ? 'bg-raised text-dim cursor-not-allowed border border-line'
+               : 'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'}"
+    >{applying ? "applying…" : "Apply"}</button>
+
+    <button
+      on:click={() => (selected = new Set())}
+      class="text-xs font-mono text-dim hover:text-muted transition-colors"
+    >clear</button>
+
+    {#if applyError}
+      <span class="text-xs font-mono text-red-400">{applyError}</span>
+    {/if}
+  </div>
+{/if}
+
+<!-- Table -->
+<div class="rounded-md overflow-hidden" style="border: 1px solid #21262d;">
   <table class="w-full text-sm border-collapse">
-    <thead>
-      <tr class="text-left border-b border-zinc-700 select-none">
-        <th class="py-2 pr-3 w-6">
+    <thead style="background: #0d1117; border-bottom: 1px solid #21262d;">
+      <tr>
+        <th class="th-static pl-4 pr-3 w-8">
           <input
             type="checkbox"
             checked={allSelected}
             bind:indeterminate={someSelected}
             on:click={toggleAll}
-            class="cursor-pointer accent-zinc-400"
           />
         </th>
         {#each [["name","Device"],["vendor","Vendor"],["device_type","Type"]] as [key, col]}
-          <th
-            class="py-2 pr-4 cursor-pointer hover:text-white whitespace-nowrap"
-            on:click={() => toggleSort(key)}
-          >{col}{#if sortKey === key}<span class="ml-1 text-zinc-400">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}</th>
+          <th class="th" on:click={() => toggleSort(key)}>{col}{sortIcon(key)}</th>
         {/each}
-        <th class="py-2 pr-4">Label</th>
-        <th
-          class="py-2 pr-4 cursor-pointer hover:text-white whitespace-nowrap"
-          on:click={() => toggleSort("tag")}
-        >Tag{#if sortKey === "tag"}<span class="ml-1 text-zinc-400">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}</th>
-        <th
-          class="py-2 cursor-pointer hover:text-white whitespace-nowrap"
-          on:click={() => toggleSort("last_seen")}
-        >Last Seen{#if sortKey === "last_seen"}<span class="ml-1 text-zinc-400">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}</th>
+        <th class="th-static">Label</th>
+        <th class="th" on:click={() => toggleSort("tag")}>Tag{sortIcon("tag")}</th>
+        <th class="th" on:click={() => toggleSort("last_seen")}>Last Seen{sortIcon("last_seen")}</th>
+        <th class="th-static"></th>
       </tr>
     </thead>
-    <tbody>
+    <tbody style="background: #07090d;">
       {#each sorted as device}
-        <tr class="border-b border-zinc-800 {selected.has(device.mac) ? 'bg-zinc-800/50' : ''}">
-          <td class="py-2 pr-3">
+        {@const sel = selected.has(device.mac)}
+        <tr
+          class="border-b transition-colors duration-75 cursor-default"
+          style="border-color: #161b22; background: {sel ? 'rgba(56,189,248,0.05)' : 'transparent'};"
+          on:mouseenter={(e) => { if (!sel) (e.currentTarget as HTMLElement).style.background = '#0d1117'; }}
+          on:mouseleave={(e) => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <!-- Checkbox -->
+          <td class="pl-4 pr-3 py-2.5">
             <input
               type="checkbox"
-              checked={selected.has(device.mac)}
+              checked={sel}
               on:click={() => toggleDevice(device.mac)}
-              class="cursor-pointer accent-zinc-400"
             />
           </td>
-          <td class="py-2 pr-4">
+
+          <!-- Device name / MAC -->
+          <td class="py-2.5 pr-4 max-w-[220px]">
             {#if device.label || device.ssid}
-              <span class="text-sm">{device.label ?? device.ssid}</span>
-              <span class="block font-mono text-xs text-zinc-500">{device.mac}</span>
+              <div class="text-text text-sm font-medium truncate">{device.label ?? device.ssid}</div>
+              <div class="font-mono text-[11px] text-dim mt-0.5">{device.mac}</div>
             {:else}
-              <span class="font-mono text-xs">{device.mac}</span>
+              <div class="font-mono text-xs text-muted">{device.mac}</div>
             {/if}
           </td>
-          <td class="py-2 pr-4 text-zinc-400 text-xs">{device.vendor ?? "—"}</td>
-          <td class="py-2 pr-4 text-zinc-400">{device.device_type}</td>
-          <td class="py-2 pr-4">
-            <form method="POST" action="?/label" use:enhance class="flex gap-1">
+
+          <!-- Vendor -->
+          <td class="py-2.5 pr-4 text-muted text-xs max-w-[160px] truncate">
+            {device.vendor ?? <span class="text-dim">—</span>}
+          </td>
+
+          <!-- Type badge -->
+          <td class="py-2.5 pr-4">
+            <span class="badge {TYPE_BADGE[device.device_type] ?? 'text-muted border-bright'}">
+              {device.device_type}
+            </span>
+          </td>
+
+          <!-- Label input -->
+          <td class="py-2.5 pr-4">
+            <form method="POST" action="?/label" use:enhance class="flex items-center gap-1">
               <input type="hidden" name="mac" value={device.mac} />
               <input
                 type="text"
                 name="label"
                 value={device.label ?? ""}
                 placeholder="add label"
-                class="bg-transparent border-b border-zinc-600 focus:border-zinc-300 outline-none text-sm w-32"
+                class="bg-transparent border-b border-bright focus:border-accent outline-none text-xs text-text placeholder:text-dim w-28 transition-colors"
               />
-              <button type="submit" class="text-xs text-zinc-500 hover:text-white">✓</button>
+              <button type="submit" class="text-dim hover:text-accent transition-colors text-xs ml-1">✓</button>
             </form>
           </td>
-          <td class="py-2 pr-4">
+
+          <!-- Tag badge (clickable select overlay) -->
+          <td class="py-2.5 pr-4">
             <form method="POST" action="?/tag" use:enhance>
               <input type="hidden" name="mac" value={device.mac} />
-              <select
-                name="tag"
-                on:change={(e) => (e.currentTarget as HTMLSelectElement).form?.submit()}
-                class="bg-zinc-800 border border-zinc-600 rounded px-1 py-0.5 text-xs {TAG_COLOR[device.tag]}"
-              >
-                {#each TAGS as tag}
-                  <option value={tag} selected={device.tag === tag}>{tag}</option>
-                {/each}
-              </select>
+              <div class="relative inline-flex">
+                <span class="badge {TAG_BADGE[device.tag] ?? 'text-muted border-bright'}">{device.tag}</span>
+                <select
+                  name="tag"
+                  on:change={(e) => (e.currentTarget as HTMLSelectElement).form?.submit()}
+                  class="absolute inset-0 opacity-0 cursor-pointer w-full"
+                  aria-label="Change tag"
+                >
+                  {#each TAGS as tag}
+                    <option value={tag} selected={device.tag === tag}>{tag}</option>
+                  {/each}
+                </select>
+              </div>
             </form>
           </td>
-          <td class="py-2 text-zinc-400 text-xs">
+
+          <!-- Last seen -->
+          <td class="py-2.5 font-mono text-[11px] text-dim whitespace-nowrap">
             {new Date(device.last_seen).toLocaleString()}
           </td>
         </tr>
