@@ -223,7 +223,11 @@
 
           <!-- Vendor -->
           <td class="py-2.5 pr-4 text-muted text-xs max-w-[160px] truncate">
-            {device.vendor ?? <span class="text-dim">—</span>}
+            {#if device.vendor}
+              {device.vendor}
+            {:else}
+              <span class="text-dim">—</span>
+            {/if}
           </td>
 
           <!-- Type badge -->
