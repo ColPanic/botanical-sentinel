@@ -6,7 +6,11 @@ SHELL   := /bin/bash
 
 # ── Configurable ──────────────────────────────────────────────────────────────
 
-PORT    ?= /dev/cu.usbmodem2101
+# ESP32-S3 uses native USB — port is usbmodem (enter bootloader manually first)
+PORT      ?= /dev/cu.usbmodem2101
+# TTGO LoRa32 uses CH340 — port is usbserial (auto-reset works, no manual step)
+LORA_PORT ?= /dev/cu.usbserial-0001
+
 PIO     ?= ~/.platformio/penv/bin/pio
 COMPOSE := docker compose -f server/docker-compose.yml
 
@@ -36,27 +40,45 @@ help:
 	@printf '\n\033[4mTests\033[0m\n'
 	@grep -E '^test[a-zA-Z_-]*:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN {FS=":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
-	@printf '\n  PORT=$(PORT)  PIO=$(PIO)\n\n'
+	@printf '\n  PORT=$(PORT)  LORA_PORT=$(LORA_PORT)  PIO=$(PIO)\n\n'
 
 # ── Firmware ──────────────────────────────────────────────────────────────────
 
-.PHONY: firmware flash flash-tft monitor
+.PHONY: firmware firmware-scanner firmware-lora
+.PHONY: flash flash-tft flash-lora flash-lora-oled
+.PHONY: monitor monitor-lora
 
-firmware: ## Build all firmware environments
+firmware: firmware-scanner firmware-lora ## Build all firmware (both nodes)
+
+firmware-scanner: ## Build esp32-scanner firmware (all envs)
 	$(PIO) run --project-dir nodes/esp32-scanner
 
-flash: ## Flash headless firmware  (override: PORT=/dev/cu.xxx)
+firmware-lora: ## Build ttgo-lora32 firmware (all envs)
+	$(PIO) run --project-dir nodes/ttgo-lora32
+
+flash: ## Flash esp32-scanner headless  [PORT=] — manual bootloader entry required
 	@printf 'Hold BOOT, press+release RESET, release BOOT — then press Enter\n'; read _
 	$(PIO) run --project-dir nodes/esp32-scanner \
 	  -e esp32-s3-devkitc-1-headless -t upload --upload-port $(PORT)
 
-flash-tft: ## Flash TFT firmware  (override: PORT=/dev/cu.xxx)
+flash-tft: ## Flash esp32-scanner TFT  [PORT=] — manual bootloader entry required
 	@printf 'Hold BOOT, press+release RESET, release BOOT — then press Enter\n'; read _
 	$(PIO) run --project-dir nodes/esp32-scanner \
 	  -e esp32-s3-devkitc-1-tft -t upload --upload-port $(PORT)
 
-monitor: ## Open serial monitor
+flash-lora: ## Flash ttgo-lora32 headless  [LORA_PORT=] — auto-reset, no manual step
+	$(PIO) run --project-dir nodes/ttgo-lora32 \
+	  -e ttgo-lora32-headless -t upload --upload-port $(LORA_PORT)
+
+flash-lora-oled: ## Flash ttgo-lora32 OLED  [LORA_PORT=] — auto-reset, no manual step
+	$(PIO) run --project-dir nodes/ttgo-lora32 \
+	  -e ttgo-lora32-oled -t upload --upload-port $(LORA_PORT)
+
+monitor: ## Open serial monitor for esp32-scanner
 	$(PIO) device monitor --project-dir nodes/esp32-scanner
+
+monitor-lora: ## Open serial monitor for ttgo-lora32
+	$(PIO) device monitor --project-dir nodes/ttgo-lora32
 
 # ── Server — all services ─────────────────────────────────────────────────────
 
