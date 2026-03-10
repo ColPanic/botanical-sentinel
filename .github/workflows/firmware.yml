@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'nodes/esp32-**/**'
+      - 'nodes/ttgo-lora32/**'
       - '.github/workflows/firmware.yml'
   push:
     branches: [main]
     paths:
       - 'nodes/esp32-**/**'
+      - 'nodes/ttgo-lora32/**'
 
 jobs:
   build:
@@ -17,7 +19,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        node: [esp32-scanner]
+        node: [esp32-scanner, ttgo-lora32]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
@@ -32,6 +34,9 @@ jobs:
 
       - name: Install PlatformIO
         run: pip install platformio==6.1.19
+
+      - name: Create CI config.h from example
+        run: cp nodes/${{ matrix.node }}/src/config.h.example nodes/${{ matrix.node }}/src/config.h
 
       - name: Build ${{ matrix.node }}
         run: pio run --project-dir nodes/${{ matrix.node }}
