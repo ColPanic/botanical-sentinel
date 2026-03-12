@@ -209,6 +209,9 @@ static void publishStatus() {
     doc["free_heap"]    = ESP.getFreeHeap();
     doc["ip"]           = WiFi.localIP().toString();
     doc["firmware_ver"] = FIRMWARE_VER;
+    doc["wifi_rssi"]    = WiFi.RSSI();
+    doc["node_lat"]     = NODE_LAT;
+    doc["node_lon"]     = NODE_LON;
 
     serializeJson(doc, mqttBuf, sizeof(mqttBuf));
     mqtt.publish(topicStatus, mqttBuf);
