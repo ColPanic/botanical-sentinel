@@ -20,6 +20,8 @@ def client_with_nodes():
                 "location": None,
                 "last_seen": NOW,
                 "firmware_ver": "0.2.0",
+                "lat": 38.123,
+                "lon": -122.456,
             }
         ]
     )
@@ -46,3 +48,11 @@ def test_get_nodes_empty(client_with_nodes):
     response = client.get("/nodes")
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_get_nodes_includes_coordinates(client_with_nodes):
+    client, _ = client_with_nodes
+    response = client.get("/nodes")
+    data = response.json()
+    assert data[0]["lat"] == 38.123
+    assert data[0]["lon"] == -122.456

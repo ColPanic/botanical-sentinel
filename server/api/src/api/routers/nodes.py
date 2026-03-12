@@ -13,7 +13,7 @@ router = APIRouter(prefix="/nodes", tags=["nodes"])
 async def list_nodes(pool: asyncpg.Pool = Depends(get_pool)):
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT node_id, node_type, location, last_seen, firmware_ver "
+            "SELECT node_id, node_type, location, last_seen, firmware_ver, lat, lon "
             "FROM nodes ORDER BY last_seen DESC"
         )
     return [dict(r) for r in rows]

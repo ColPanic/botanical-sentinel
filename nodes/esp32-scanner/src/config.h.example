@@ -10,3 +10,8 @@
 
 #define NODE_ID        "scanner-01"    // unique per device
 #define FIRMWARE_VER   "0.2.0"
+
+// GPS position of this fixed node — set to actual deployed coordinates.
+// T-Beam nodes use onboard GPS instead; leave these at 0.0 for T-Beams.
+#define NODE_LAT  0.000000   // decimal degrees, e.g. 38.123456
+#define NODE_LON  0.000000   // decimal degrees, e.g. -122.654321

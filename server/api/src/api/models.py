@@ -11,6 +11,22 @@ class NodeResponse(BaseModel):
     location: str | None
     last_seen: datetime
     firmware_ver: str
+    lat: float | None
+    lon: float | None
+
+
+class PositionResponse(BaseModel):
+    time: datetime
+    mac: str
+    lat: float
+    lon: float
+    accuracy_m: float | None
+    node_count: int
+    method: str
+    label: str | None
+    tag: str
+    vendor: str | None
+    device_type: str
 
 
 class DeviceResponse(BaseModel):

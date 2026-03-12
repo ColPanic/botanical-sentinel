@@ -10,3 +10,6 @@
 
 #define NODE_ID        "ttgo-lora32-01"   // unique per device
 #define FIRMWARE_VER   "0.1.0"
+
+// Location: T-Beam uses onboard NEO-M8N GPS automatically.
+// No NODE_LAT/NODE_LON needed — GPS coordinates are published in status.

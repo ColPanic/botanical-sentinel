@@ -52,3 +52,46 @@ export function liveWebSocket(onMessage: (data: unknown) => void): WebSocket {
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   return ws;
 }
+
+export type PositionResponse = {
+  time: string;
+  mac: string;
+  lat: number;
+  lon: number;
+  accuracy_m: number | null;
+  node_count: number;
+  method: string;
+  label: string | null;
+  tag: string;
+  vendor: string | null;
+  device_type: string;
+};
+
+export type NodeResponse = {
+  node_id: string;
+  node_type: string;
+  location: string | null;
+  last_seen: string;
+  firmware_ver: string;
+  lat: number | null;
+  lon: number | null;
+};
+
+export async function fetchCurrentPositions(tag?: string): Promise<PositionResponse[]> {
+  const url = tag ? `${BASE}/positions/current?tag=${tag}` : `${BASE}/positions/current`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`GET /positions/current failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchActivePositions(windowMinutes = 5): Promise<PositionResponse[]> {
+  const res = await fetch(`${BASE}/positions/active?window_minutes=${windowMinutes}`);
+  if (!res.ok) throw new Error(`GET /positions/active failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchPositionHistory(mac: string, limit = 100): Promise<PositionResponse[]> {
+  const res = await fetch(`${BASE}/positions/${encodeURIComponent(mac)}/history?limit=${limit}`);
+  if (!res.ok) throw new Error(`GET /positions/${mac}/history failed: ${res.status}`);
+  return res.json();
+}
