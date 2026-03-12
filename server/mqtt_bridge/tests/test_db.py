@@ -34,3 +34,26 @@ async def test_upsert_node_without_coords_does_not_overwrite(mock_pool):
                       lat=None, lon=None)
     sql = conn.execute.call_args[0][0]
     assert "CASE WHEN" in sql
+
+
+from datetime import UTC, datetime
+from mqtt_bridge.handler import ScanEvent
+
+
+async def test_insert_scan_events_includes_node_coords(mock_pool):
+    pool, conn = mock_pool
+    conn.executemany = AsyncMock()
+    conn.execute = AsyncMock()
+    from mqtt_bridge.db import insert_scan_events
+    events = [
+        ScanEvent(
+            node_id="scanner-01", mac="AA:BB:CC:DD:EE:FF",
+            rssi=-60, scan_type="wifi", ssid="Net",
+            time=datetime(2026, 3, 12, tzinfo=UTC),
+            node_lat=38.123, node_lon=-122.456,
+        )
+    ]
+    await insert_scan_events(pool, events)
+    rows = conn.executemany.call_args[0][1]
+    assert rows[0][6] == 38.123   # node_lat is 7th element (index 6)
+    assert rows[0][7] == -122.456  # node_lon is 8th element (index 7)

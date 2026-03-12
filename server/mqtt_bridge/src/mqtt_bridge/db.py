@@ -70,10 +70,15 @@ async def insert_scan_events(pool: asyncpg.Pool, events: list[ScanEvent]) -> Non
     async with pool.acquire() as conn:
         await conn.executemany(
             """
-            INSERT INTO scan_events (time, node_id, mac, rssi, scan_type, ssid)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO scan_events
+                (time, node_id, mac, rssi, scan_type, ssid, node_lat, node_lon)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             """,
-            [(e.time, e.node_id, e.mac, e.rssi, e.scan_type, e.ssid) for e in events],
+            [
+                (e.time, e.node_id, e.mac, e.rssi, e.scan_type, e.ssid,
+                 e.node_lat, e.node_lon)
+                for e in events
+            ],
         )
         payload = json.dumps(
             {
