@@ -38,6 +38,7 @@ async def _listen_loop() -> None:
                 await _broadcast(payload)
 
             await conn.add_listener("scan_events", on_notify)
+            await conn.add_listener("position_estimates", on_notify)
 
             # Poll for connection loss — notifications arrive via asyncpg's callback,
             # not via this loop.
