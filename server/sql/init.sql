@@ -47,3 +47,30 @@ CREATE TABLE IF NOT EXISTS commands (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     executed_at  TIMESTAMPTZ
 );
+
+-- Idempotent coordinate migrations
+ALTER TABLE nodes      ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE nodes      ADD COLUMN IF NOT EXISTS lon DOUBLE PRECISION;
+ALTER TABLE scan_events ADD COLUMN IF NOT EXISTS node_lat DOUBLE PRECISION;
+ALTER TABLE scan_events ADD COLUMN IF NOT EXISTS node_lon DOUBLE PRECISION;
+
+CREATE TABLE IF NOT EXISTS position_estimates (
+    time        TIMESTAMPTZ      NOT NULL,
+    mac         TEXT             NOT NULL,
+    lat         DOUBLE PRECISION NOT NULL,
+    lon         DOUBLE PRECISION NOT NULL,
+    accuracy_m  REAL,
+    node_count  INTEGER          NOT NULL,
+    method      TEXT             NOT NULL
+);
+
+SELECT create_hypertable('position_estimates', by_range('time'), if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS position_estimates_mac_time
+    ON position_estimates (mac, time DESC);
+
+SELECT add_retention_policy(
+    'position_estimates',
+    INTERVAL '30 days',
+    if_not_exists => TRUE
+);
