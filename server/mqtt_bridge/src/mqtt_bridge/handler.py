@@ -11,8 +11,8 @@ class ScanEvent:
     mac: str
     rssi: int
     scan_type: str
-    ssid:     str | None
-    time:     datetime
+    ssid: str | None
+    time: datetime
     node_lat: float | None = None
     node_lon: float | None = None
 

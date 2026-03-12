@@ -1,6 +1,7 @@
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 import mqtt_bridge.main as main_module
 
@@ -26,11 +27,16 @@ def mock_pool():
 
 @pytest.mark.asyncio
 async def test_handle_status_tbeam_gps_fix_caches_coords(mock_pool):
-    payload = json.dumps({
-        "firmware_ver": "0.1.0", "ip": "10.0.0.2",
-        "gps_fix": True, "gps_lat": 38.123, "gps_lon": -122.456,
-        "uptime_ms": 1000,
-    }).encode()
+    payload = json.dumps(
+        {
+            "firmware_ver": "0.1.0",
+            "ip": "10.0.0.2",
+            "gps_fix": True,
+            "gps_lat": 38.123,
+            "gps_lon": -122.456,
+            "uptime_ms": 1000,
+        }
+    ).encode()
     with patch("mqtt_bridge.main.upsert_node", new=AsyncMock()) as mock_upsert:
         await main_module.handle_status(mock_pool, "nodes/tbeam-01/status", payload)
     assert main_module._node_coords["tbeam-01"] == (38.123, -122.456)
@@ -41,11 +47,15 @@ async def test_handle_status_tbeam_gps_fix_caches_coords(mock_pool):
 
 @pytest.mark.asyncio
 async def test_handle_status_fixed_node_caches_coords(mock_pool):
-    payload = json.dumps({
-        "firmware_ver": "0.2.0", "ip": "10.0.0.3",
-        "node_lat": 38.500, "node_lon": -122.900,
-        "uptime_ms": 2000,
-    }).encode()
+    payload = json.dumps(
+        {
+            "firmware_ver": "0.2.0",
+            "ip": "10.0.0.3",
+            "node_lat": 38.500,
+            "node_lon": -122.900,
+            "uptime_ms": 2000,
+        }
+    ).encode()
     with patch("mqtt_bridge.main.upsert_node", new=AsyncMock()):
         await main_module.handle_status(mock_pool, "nodes/scanner-01/status", payload)
     assert main_module._node_coords["scanner-01"] == (38.500, -122.900)
@@ -53,10 +63,14 @@ async def test_handle_status_fixed_node_caches_coords(mock_pool):
 
 @pytest.mark.asyncio
 async def test_handle_status_no_gps_fix_does_not_cache(mock_pool):
-    payload = json.dumps({
-        "firmware_ver": "0.1.0", "ip": "10.0.0.2",
-        "gps_fix": False, "uptime_ms": 500,
-    }).encode()
+    payload = json.dumps(
+        {
+            "firmware_ver": "0.1.0",
+            "ip": "10.0.0.2",
+            "gps_fix": False,
+            "uptime_ms": 500,
+        }
+    ).encode()
     with patch("mqtt_bridge.main.upsert_node", new=AsyncMock()):
         await main_module.handle_status(mock_pool, "nodes/tbeam-01/status", payload)
     assert "tbeam-01" not in main_module._node_coords
@@ -73,8 +87,10 @@ async def test_handle_scan_stamps_coords_from_cache(mock_pool):
     async def capture_events(pool, events):
         stamped_events.extend(events)
 
-    with patch("mqtt_bridge.main.upsert_devices", new=AsyncMock()), \
-         patch("mqtt_bridge.main.insert_scan_events", new=capture_events):
+    with (
+        patch("mqtt_bridge.main.upsert_devices", new=AsyncMock()),
+        patch("mqtt_bridge.main.insert_scan_events", new=capture_events),
+    ):
         await main_module.handle_scan(mock_pool, "nodes/scanner-01/scan/wifi", payload)
 
     assert len(stamped_events) == 1
@@ -93,8 +109,10 @@ async def test_handle_scan_no_coords_leaves_none(mock_pool):
     async def capture_events(pool, events):
         stamped_events.extend(events)
 
-    with patch("mqtt_bridge.main.upsert_devices", new=AsyncMock()), \
-         patch("mqtt_bridge.main.insert_scan_events", new=capture_events):
+    with (
+        patch("mqtt_bridge.main.upsert_devices", new=AsyncMock()),
+        patch("mqtt_bridge.main.insert_scan_events", new=capture_events),
+    ):
         await main_module.handle_scan(mock_pool, "nodes/scanner-02/scan/wifi", payload)
 
     assert stamped_events[0].node_lat is None

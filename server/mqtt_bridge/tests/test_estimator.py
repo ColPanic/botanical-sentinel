@@ -1,5 +1,5 @@
-import math
 import pytest
+
 from mqtt_bridge.estimator import haversine, rssi_to_distance, weighted_centroid
 
 

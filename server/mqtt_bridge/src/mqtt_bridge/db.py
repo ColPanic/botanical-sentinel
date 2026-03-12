@@ -75,8 +75,7 @@ async def insert_scan_events(pool: asyncpg.Pool, events: list[ScanEvent]) -> Non
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             """,
             [
-                (e.time, e.node_id, e.mac, e.rssi, e.scan_type, e.ssid,
-                 e.node_lat, e.node_lon)
+                (e.time, e.node_id, e.mac, e.rssi, e.scan_type, e.ssid, e.node_lat, e.node_lon)
                 for e in events
             ],
         )

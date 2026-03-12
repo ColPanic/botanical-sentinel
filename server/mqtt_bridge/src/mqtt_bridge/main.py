@@ -67,8 +67,7 @@ async def handle_status(pool: asyncpg.Pool, topic: str, payload: bytes) -> None:
         lat=lat,
         lon=lon,
     )
-    log.info("node=%s status uptime_ms=%s lat=%s lon=%s",
-             node_id, data.get("uptime_ms"), lat, lon)
+    log.info("node=%s status uptime_ms=%s lat=%s lon=%s", node_id, data.get("uptime_ms"), lat, lon)
 
 
 async def _run_mqtt(pool: asyncpg.Pool) -> None:

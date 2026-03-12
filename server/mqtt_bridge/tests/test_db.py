@@ -1,5 +1,9 @@
-import pytest
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from mqtt_bridge.handler import ScanEvent
 
 
 @pytest.fixture
@@ -17,8 +21,10 @@ def mock_pool():
 async def test_upsert_node_with_coords(mock_pool):
     pool, conn = mock_pool
     from mqtt_bridge.db import upsert_node
-    await upsert_node(pool, "scanner-01", firmware_ver="0.2.0", ip="10.0.0.1",
-                      lat=38.123, lon=-122.456)
+
+    await upsert_node(
+        pool, "scanner-01", firmware_ver="0.2.0", ip="10.0.0.1", lat=38.123, lon=-122.456
+    )
     call_args = conn.execute.call_args[0]
     sql = call_args[0]
     params = call_args[1:]
@@ -30,14 +36,10 @@ async def test_upsert_node_with_coords(mock_pool):
 async def test_upsert_node_without_coords_does_not_overwrite(mock_pool):
     pool, conn = mock_pool
     from mqtt_bridge.db import upsert_node
-    await upsert_node(pool, "scanner-01", firmware_ver="0.2.0", ip="10.0.0.1",
-                      lat=None, lon=None)
+
+    await upsert_node(pool, "scanner-01", firmware_ver="0.2.0", ip="10.0.0.1", lat=None, lon=None)
     sql = conn.execute.call_args[0][0]
     assert "CASE WHEN" in sql
-
-
-from datetime import UTC, datetime
-from mqtt_bridge.handler import ScanEvent
 
 
 async def test_insert_scan_events_includes_node_coords(mock_pool):
@@ -45,15 +47,20 @@ async def test_insert_scan_events_includes_node_coords(mock_pool):
     conn.executemany = AsyncMock()
     conn.execute = AsyncMock()
     from mqtt_bridge.db import insert_scan_events
+
     events = [
         ScanEvent(
-            node_id="scanner-01", mac="AA:BB:CC:DD:EE:FF",
-            rssi=-60, scan_type="wifi", ssid="Net",
+            node_id="scanner-01",
+            mac="AA:BB:CC:DD:EE:FF",
+            rssi=-60,
+            scan_type="wifi",
+            ssid="Net",
             time=datetime(2026, 3, 12, tzinfo=UTC),
-            node_lat=38.123, node_lon=-122.456,
+            node_lat=38.123,
+            node_lon=-122.456,
         )
     ]
     await insert_scan_events(pool, events)
     rows = conn.executemany.call_args[0][1]
-    assert rows[0][6] == 38.123   # node_lat is 7th element (index 6)
+    assert rows[0][6] == 38.123  # node_lat is 7th element (index 6)
     assert rows[0][7] == -122.456  # node_lon is 8th element (index 7)

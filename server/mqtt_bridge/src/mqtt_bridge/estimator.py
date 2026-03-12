@@ -12,8 +12,8 @@ log = logging.getLogger(__name__)
 
 EARTH_RADIUS_M = 6_371_000.0
 # Log-distance path loss constants
-_TX_POWER_DBM = -59    # reference RSSI at 1 m (reasonable default for WiFi/BLE)
-_PATH_LOSS_EXP = 2.7   # outdoor path loss exponent
+_TX_POWER_DBM = -59  # reference RSSI at 1 m (reasonable default for WiFi/BLE)
+_PATH_LOSS_EXP = 2.7  # outdoor path loss exponent
 
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -22,9 +22,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dlon = math.radians(lon2 - lon1)
     a = (
         math.sin(dlat / 2) ** 2
-        + math.cos(math.radians(lat1))
-        * math.cos(math.radians(lat2))
-        * math.sin(dlon / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
     )
     return EARTH_RADIUS_M * 2 * math.asin(math.sqrt(a))
 
@@ -64,10 +62,13 @@ def _accuracy_centroid(
     """Weighted stddev of great-circle distances from estimate to each node."""
     weights = [10 ** (rssi / 10) for _, _, rssi in nodes]
     total = sum(weights)
-    variance = sum(
-        w * haversine(est_lat, est_lon, lat, lon) ** 2
-        for w, (lat, lon, _) in zip(weights, nodes)
-    ) / total
+    variance = (
+        sum(
+            w * haversine(est_lat, est_lon, lat, lon) ** 2
+            for w, (lat, lon, _) in zip(weights, nodes)
+        )
+        / total
+    )
     return math.sqrt(variance)
 
 
@@ -86,9 +87,7 @@ async def _estimate_once(pool: asyncpg.Pool) -> None:
     # Group rows by mac
     by_mac: dict[str, list[tuple[float, float, int]]] = {}
     for row in rows:
-        by_mac.setdefault(row["mac"], []).append(
-            (row["node_lat"], row["node_lon"], row["rssi"])
-        )
+        by_mac.setdefault(row["mac"], []).append((row["node_lat"], row["node_lon"], row["rssi"]))
 
     if not by_mac:
         return
@@ -111,16 +110,18 @@ async def _estimate_once(pool: asyncpg.Pool) -> None:
 
         inserts.append((now, mac, lat, lon, accuracy_m, node_count, method))
         notifications.append(
-            json.dumps({
-                "type": "position_update",
-                "mac": mac,
-                "lat": lat,
-                "lon": lon,
-                "accuracy_m": accuracy_m,
-                "node_count": node_count,
-                "method": method,
-                "time": now.isoformat(),
-            })
+            json.dumps(
+                {
+                    "type": "position_update",
+                    "mac": mac,
+                    "lat": lat,
+                    "lon": lon,
+                    "accuracy_m": accuracy_m,
+                    "node_count": node_count,
+                    "method": method,
+                    "time": now.isoformat(),
+                }
+            )
         )
 
     async with pool.acquire() as conn:
