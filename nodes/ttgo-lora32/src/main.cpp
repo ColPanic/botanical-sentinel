@@ -4,6 +4,9 @@
 #include <BLEDevice.h>
 #include <BLEScan.h>
 #include <PubSubClient.h>
+#include <TinyGPSPlus.h>
+#include <Wire.h>
+#include <axp20x.h>
 #ifdef HAS_OLED
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -15,14 +18,15 @@
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-static constexpr uint32_t SCAN_INTERVAL_MS = 30000;
-static constexpr uint8_t  MAX_WIFI         = 20;
-static constexpr uint8_t  MAX_BLE          = 20;
+static constexpr uint32_t SCAN_INTERVAL_MS    = 30000;
+static constexpr uint32_t DISPLAY_INTERVAL_MS = 5000;
+static constexpr uint8_t  MAX_WIFI            = 20;
+static constexpr uint8_t  MAX_BLE             = 20;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 struct WifiResult {
-    char    ssid[33];
+    char    ssid[33];   // 32 chars + null terminator
     uint8_t bssid[6];
     int32_t rssi;
     uint8_t channel;
@@ -30,15 +34,20 @@ struct WifiResult {
 
 struct BleResult {
     char    name[32];
-    char    mac[18];
+    char    mac[18];    // "AA:BB:CC:DD:EE:FF\0"
     int32_t rssi;
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
+static AXP20X_Class axp;
+
 #ifdef HAS_OLED
-static Adafruit_SSD1306 oled(128, 64, &Wire, OLED_RST);
+static Adafruit_SSD1306 oled(128, 64, &Wire, DISP_RST);
 #endif
+
+static TinyGPSPlus gps;
+
 static WifiResult wifiResults[MAX_WIFI];
 static uint8_t    wifiCount  = 0;
 static uint32_t   scanCount  = 0;
@@ -54,6 +63,32 @@ static char topicWifi[64];
 static char topicBle[64];
 static char topicStatus[64];
 static char mqttBuf[4096];
+
+// ── AXP192 PMIC ───────────────────────────────────────────────────────────────
+
+static void initAXP192() {
+    if (axp.begin(Wire, AXP192_SLAVE_ADDRESS) != AXP_PASS) {
+        Serial.println("[AXP] Init failed — PMIC not responding at 0x34");
+        return;
+    }
+    axp.setLDO2Voltage(3300);                        // LoRa module (SX1276)
+    axp.setPowerOutPut(AXP192_LDO2, AXP202_ON);
+    axp.setLDO3Voltage(3300);                        // GPS (u-blox NEO-M8N)
+    axp.setPowerOutPut(AXP192_LDO3, AXP202_ON);
+    Serial.printf("[AXP] PMIC OK — Batt: %.2f V\n", axp.getBattVoltage() / 1000.0f);
+}
+
+// ── Battery ───────────────────────────────────────────────────────────────────
+
+static float readBatteryVolts() {
+    return axp.getBattVoltage() / 1000.0f;
+}
+
+static uint8_t voltageToPercent(float v) {
+    if (v >= 4.2f) return 100;
+    if (v <= 3.0f) return 0;
+    return static_cast<uint8_t>((v - 3.0f) / 1.2f * 100.0f);
+}
 
 // ── Connectivity ──────────────────────────────────────────────────────────────
 
@@ -116,18 +151,18 @@ static void scanWifi() {
     WiFi.scanDelete();
 
     Serial.printf("[WiFi] %u networks\n", wifiCount);
-    for (uint8_t i = 0; i < wifiCount; i++) {
-        const char* ssid = wifiResults[i].ssid[0]
-            ? wifiResults[i].ssid : "[hidden]";
-        Serial.printf("  %-32s  %4d dBm  ch%u\n",
-            ssid, wifiResults[i].rssi, wifiResults[i].channel);
-    }
 }
 
 // ── BLE scan ──────────────────────────────────────────────────────────────────
 
 static void scanBle() {
     BLEScan* pScan = BLEDevice::getScan();
+    if (pScan == nullptr) {
+        Serial.println("[BLE] getScan() returned null — skipping");
+        bleCount = 0;
+        return;
+    }
+
     pScan->setActiveScan(false);
     pScan->setInterval(100);
     pScan->setWindow(99);
@@ -152,11 +187,6 @@ static void scanBle() {
     pScan->clearResults();
 
     Serial.printf("[BLE] %u devices\n", bleCount);
-    for (uint8_t i = 0; i < bleCount; i++) {
-        const char* label = bleResults[i].name[0]
-            ? bleResults[i].name : bleResults[i].mac;
-        Serial.printf("  %-31s  %4d dBm\n", label, bleResults[i].rssi);
-    }
 }
 
 // ── MQTT publish ──────────────────────────────────────────────────────────────
@@ -207,6 +237,22 @@ static void publishStatus() {
     doc["free_heap"]    = ESP.getFreeHeap();
     doc["ip"]           = WiFi.localIP().toString();
     doc["firmware_ver"] = FIRMWARE_VER;
+    doc["wifi_rssi"]    = WiFi.RSSI();
+
+    float volts = readBatteryVolts();
+    doc["battery_v"]   = serialized(String(volts, 2));
+    doc["battery_pct"] = voltageToPercent(volts);
+
+    if (gps.location.isValid()) {
+        doc["gps_lat"]  = serialized(String(gps.location.lat(), 6));
+        doc["gps_lon"]  = serialized(String(gps.location.lng(), 6));
+        doc["gps_alt"]  = serialized(String(gps.altitude.meters(), 1));
+        doc["gps_sats"] = gps.satellites.value();
+        doc["gps_fix"]  = true;
+    } else {
+        doc["gps_fix"]  = false;
+        doc["gps_sats"] = gps.satellites.isValid() ? gps.satellites.value() : 0;
+    }
 
     serializeJson(doc, mqttBuf, sizeof(mqttBuf));
     mqtt.publish(topicStatus, mqttBuf);
@@ -214,60 +260,84 @@ static void publishStatus() {
 }
 
 // ── Display render ────────────────────────────────────────────────────────────
-
-static void renderDisplay(uint32_t scanStartMs) {
+//
+// Layout (128×64, font size 1 = 6×8 px):
+//   y= 0  Batt: 3.82V 62%
+//   y= 9  ─────────────────
+//   y=11  Lat: 48.8234N         (or "GPS: no fix")
+//   y=20  Lon:  2.3560E         (or "Sats: 3")
+//   y=29  Alt:45m  Sats:8       (or blank)
+//   y=38  ─────────────────
+//   y=40  WiFi: -65 dBm         (or "WiFi: offline")
+//   y=49  <NODE_ID>
+//
+static void renderDisplay() {
 #ifdef HAS_OLED
     oled.clearDisplay();
     oled.setTextSize(1);
     oled.setTextColor(SSD1306_WHITE);
 
-    // Header: "W:8 B:5 #4"
+    // Battery
     char buf[32];
-    snprintf(buf, sizeof(buf), "W:%u B:%u #%lu",
-        wifiCount, bleCount, static_cast<unsigned long>(scanCount));
+    float volts = readBatteryVolts();
+    snprintf(buf, sizeof(buf), "Batt:%.2fV %u%%",
+        volts, voltageToPercent(volts));
     oled.setCursor(0, 0);
     oled.print(buf);
 
     oled.drawFastHLine(0, 9, 128, SSD1306_WHITE);
 
-    // WiFi rows (up to 3)
-    uint8_t wRows = wifiCount < 3 ? wifiCount : 3;
-    for (uint8_t i = 0; i < wRows; i++) {
-        const char* raw = wifiResults[i].ssid[0]
-            ? wifiResults[i].ssid : "[hidden]";
-        char ssidBuf[13];
-        strncpy(ssidBuf, raw, 12);
-        ssidBuf[12] = '\0';
-        snprintf(buf, sizeof(buf), "%-12s%4d", ssidBuf, wifiResults[i].rssi);
-        oled.setCursor(0, 11 + i * 9);
+    // GPS
+    if (gps.location.isValid() && gps.location.age() < 5000) {
+        double lat = gps.location.lat();
+        double lon = gps.location.lng();
+
+        snprintf(buf, sizeof(buf), "Lat:%s%.4f",
+            lat >= 0 ? " " : "", lat);
+        oled.setCursor(0, 11);
+        oled.print(buf);
+
+        snprintf(buf, sizeof(buf), "Lon:%s%.4f",
+            lon >= 0 ? " " : "", lon);
+        oled.setCursor(0, 20);
+        oled.print(buf);
+
+        uint32_t sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
+        snprintf(buf, sizeof(buf), "Alt:%.0fm  Sats:%lu",
+            gps.altitude.isValid() ? gps.altitude.meters() : 0.0,
+            static_cast<unsigned long>(sats));
+        oled.setCursor(0, 29);
+        oled.print(buf);
+    } else {
+        oled.setCursor(0, 11);
+        oled.print("GPS: no fix");
+
+        uint32_t sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
+        snprintf(buf, sizeof(buf), "Sats: %lu visible",
+            static_cast<unsigned long>(sats));
+        oled.setCursor(0, 20);
         oled.print(buf);
     }
 
     oled.drawFastHLine(0, 38, 128, SSD1306_WHITE);
 
-    // BLE rows (up to 2)
-    uint8_t bRows = bleCount < 2 ? bleCount : 2;
-    for (uint8_t i = 0; i < bRows; i++) {
-        const char* raw = bleResults[i].name[0]
-            ? bleResults[i].name : bleResults[i].mac;
-        char nameBuf[15];
-        strncpy(nameBuf, raw, 14);
-        nameBuf[14] = '\0';
-        snprintf(buf, sizeof(buf), "%-14s%4d", nameBuf, bleResults[i].rssi);
-        oled.setCursor(0, 40 + i * 9);
-        oled.print(buf);
+    // WiFi signal
+    if (WiFi.status() == WL_CONNECTED) {
+        snprintf(buf, sizeof(buf), "WiFi: %d dBm", WiFi.RSSI());
+    } else {
+        snprintf(buf, sizeof(buf), "WiFi: offline");
     }
-
-    // Footer: elapsed
-    uint32_t elapsedSec = (millis() - scanStartMs) / 1000;
-    snprintf(buf, sizeof(buf), "%lus ago",
-        static_cast<unsigned long>(elapsedSec));
-    oled.setCursor(0, 59);
+    oled.setCursor(0, 40);
     oled.print(buf);
 
+    // Node ID footer
+    char nodeId[22];
+    strncpy(nodeId, NODE_ID, 21);
+    nodeId[21] = '\0';
+    oled.setCursor(0, 49);
+    oled.print(nodeId);
+
     oled.display();
-#else
-    (void)scanStartMs;
 #endif
 }
 
@@ -278,11 +348,24 @@ void setup() {
     delay(1000);
     Serial.println("=== botanical-sentinel ttgo-lora32 node ===");
 
+    // I2C — shared by AXP192 PMIC (0x34) and OLED SSD1306 (0x3C)
+    Wire.begin(I2C_SDA, I2C_SCL);
+    initAXP192();
+
+    // GPS — powered by AXP192 LDO3; allow brief settle time after power-on
+    delay(100);
+    Serial1.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+    Serial.printf("[GPS] Serial1 at 9600 baud RX=%d TX=%d\n",
+        GPS_RX_PIN, GPS_TX_PIN);
+
 #ifdef HAS_OLED
-    Wire.begin(OLED_SDA, OLED_SCL);
-    if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-        Serial.println("[OLED] Init failed — check wiring");
+    // periphBegin=false prevents oled.begin() from resetting Wire to default pins
+    if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C, /*reset=*/true, /*periphBegin=*/false)) {
+        Serial.println("[OLED] Init failed — display not responding at 0x3C");
+        Serial.printf("[OLED] Pins: SDA=%d SCL=%d RST=%d\n",
+            I2C_SDA, I2C_SCL, DISP_RST);
     } else {
+        Serial.println("[OLED] Initialised");
         oled.clearDisplay();
         oled.setTextSize(1);
         oled.setTextColor(SSD1306_WHITE);
@@ -311,6 +394,12 @@ void setup() {
 }
 
 void loop() {
+    // Feed GPS parser continuously — must run every loop iteration
+    while (Serial1.available()) {
+        gps.encode(Serial1.read());
+    }
+
+    // Maintain WiFi/MQTT
     if (WiFi.status() != WL_CONNECTED) {
         connectWifi();
     } else {
@@ -320,25 +409,22 @@ void loop() {
         mqtt.loop();
     }
 
+    // Refresh display every 5 s (independent of 30 s scan cycle)
+    static uint32_t lastDisplay = 0;
+    if (millis() - lastDisplay >= DISPLAY_INTERVAL_MS) {
+        lastDisplay = millis();
+        renderDisplay();
+    }
+
+    // Scan + publish every 30 s
     static uint32_t lastScan = static_cast<uint32_t>(0) - SCAN_INTERVAL_MS;
-
     if (millis() - lastScan >= SCAN_INTERVAL_MS) {
-#ifdef HAS_OLED
-        oled.clearDisplay();
-        oled.setTextSize(1);
-        oled.setTextColor(SSD1306_WHITE);
-        oled.setCursor(20, 28);
-        oled.println("Scanning...");
-        oled.display();
-#endif
-
         lastScan = millis();
         scanCount++;
         Serial.printf("\n--- Scan #%lu ---\n", scanCount);
 
         scanWifi();
         scanBle();
-        renderDisplay(lastScan);
 
         if (mqtt.connected()) {
             publishWifi();
