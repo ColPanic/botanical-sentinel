@@ -6,7 +6,7 @@ export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
 		// Allow access by IP as well as hostname (needed when accessing from LAN by IP)
-		allowedHosts: 'all',
+		allowedHosts: true,
 		proxy: {
 			'/live': { target: 'ws://localhost:8000', ws: true },
 			// Proxy REST API routes so the browser can use relative URLs
