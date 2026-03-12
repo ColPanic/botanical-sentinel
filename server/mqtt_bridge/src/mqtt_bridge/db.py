@@ -23,18 +23,24 @@ async def upsert_node(
     node_id: str,
     firmware_ver: str,
     ip: str,
+    lat: float | None = None,
+    lon: float | None = None,
 ) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO nodes (node_id, node_type, last_seen, firmware_ver)
-            VALUES ($1, 'esp32_scanner', now(), $2)
-            ON CONFLICT (node_id) DO UPDATE
-                SET last_seen    = now(),
-                    firmware_ver = EXCLUDED.firmware_ver
+            INSERT INTO nodes (node_id, node_type, last_seen, firmware_ver, lat, lon)
+            VALUES ($1, 'esp32_scanner', now(), $2, $3, $4)
+            ON CONFLICT (node_id) DO UPDATE SET
+                last_seen    = now(),
+                firmware_ver = EXCLUDED.firmware_ver,
+                lat = CASE WHEN $3 IS NOT NULL THEN $3 ELSE nodes.lat END,
+                lon = CASE WHEN $4 IS NOT NULL THEN $4 ELSE nodes.lon END
             """,
             node_id,
             firmware_ver,
+            lat,
+            lon,
         )
 
 
