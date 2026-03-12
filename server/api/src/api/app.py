@@ -35,9 +35,11 @@ async def health():
 from api.routers import devices as devices_router  # noqa: E402
 from api.routers import live as live_router  # noqa: E402
 from api.routers import nodes as nodes_router  # noqa: E402
+from api.routers import positions as positions_router  # noqa: E402
 from api.routers import scan as scan_router  # noqa: E402
 
 app.include_router(nodes_router.router)
 app.include_router(devices_router.router)
 app.include_router(scan_router.router)
 app.include_router(live_router.router)
+app.include_router(positions_router.router)
