@@ -64,6 +64,15 @@ def test_parse_ble_empty_list():
     assert parse_ble("scanner-01", b"[]") == []
 
 
+def test_scan_event_node_coords_default_none():
+    payload = json.dumps(
+        [{"ssid": "Net", "bssid": "aa:bb:cc:dd:ee:ff", "rssi": -50, "channel": 6}]
+    ).encode()
+    events = parse_wifi("scanner-01", payload)
+    assert events[0].node_lat is None
+    assert events[0].node_lon is None
+
+
 @pytest.mark.skip(reason="pre-existing: lookup_vendor is async, tests call it synchronously")
 def test_lookup_vendor_known_mac():
     result = lookup_vendor("AC:DE:48:00:11:22")
