@@ -1,6 +1,11 @@
 import { env } from "$env/dynamic/public";
+import { browser } from "$app/environment";
 
-const BASE = env.PUBLIC_API_URL ?? "http://localhost:8000";
+// Server-side (SSR load functions): localhost:8000 is reachable directly.
+// Browser-side (onMount, client fetches): use PUBLIC_API_URL if set, otherwise
+// fall back to relative paths so Vite's dev-server proxy can route them correctly
+// regardless of which hostname/IP the browser used to reach the dev server.
+const BASE = env.PUBLIC_API_URL ?? (browser ? "" : "http://localhost:8000");
 
 export async function fetchNodes() {
   const res = await fetch(`${BASE}/nodes`);
