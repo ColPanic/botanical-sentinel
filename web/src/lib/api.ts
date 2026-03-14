@@ -13,7 +13,24 @@ export async function fetchNodes() {
   return res.json();
 }
 
-export async function fetchDevices(tag?: string) {
+export type DeviceRecord = {
+  mac: string;
+  device_type: string;
+  label: string | null;
+  tag: string;
+  first_seen: string;
+  last_seen: string;
+  vendor: string | null;
+  ssid: string | null;
+};
+
+export type ScanBatch = {
+  node_id: string;
+  scan_type: string;
+  devices: Array<{ mac: string; rssi: number; ssid: string | null }>;
+};
+
+export async function fetchDevices(tag?: string): Promise<DeviceRecord[]> {
   const url = tag ? `${BASE}/devices?tag=${tag}` : `${BASE}/devices`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`GET /devices failed: ${res.status}`);
