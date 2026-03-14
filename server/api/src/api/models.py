@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class NodeResponse(BaseModel):
@@ -13,6 +14,21 @@ class NodeResponse(BaseModel):
     firmware_ver: str
     lat: float | None
     lon: float | None
+    name: str | None
+
+
+class NodeUpdate(BaseModel):
+    name: Annotated[str, Field(max_length=100)] | None = None
+    lat: float
+    lon: float
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _trim_name(cls, v: object) -> object:
+        if isinstance(v, str):
+            v = v.strip()
+            return v if v else None
+        return v
 
 
 class PositionResponse(BaseModel):

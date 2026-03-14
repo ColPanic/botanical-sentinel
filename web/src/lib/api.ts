@@ -13,6 +13,19 @@ export async function fetchNodes() {
   return res.json();
 }
 
+export async function updateNode(
+  nodeId: string,
+  patch: { name: string | null; lat: number; lon: number },
+): Promise<NodeResponse> {
+  const res = await fetch(`${BASE}/nodes/${encodeURIComponent(nodeId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`PATCH /nodes/${nodeId} failed: ${res.status}`);
+  return res.json();
+}
+
 export type DeviceRecord = {
   mac: string;
   device_type: string;
@@ -97,6 +110,7 @@ export type NodeResponse = {
   firmware_ver: string;
   lat: number | null;
   lon: number | null;
+  name: string | null;
 };
 
 export async function fetchCurrentPositions(tag?: string): Promise<PositionResponse[]> {
