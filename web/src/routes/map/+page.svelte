@@ -45,6 +45,12 @@
   let saveError: string | null = null;
   let saving = false;
 
+  // ── Placement mode state ──────────────────────────────────────────────────────
+  let unlocatedNodes: NodeResponse[] = [];
+  let pendingNodeId: string | null = null;
+  let isNewPlacement = false;
+  let placementClickHandler: ((e: LeafletMouseEvent) => void) | null = null;
+
   // Stored listener refs for cleanup
   let mapClickHandler: ((e: LeafletMouseEvent) => void) | null = null;
   let dragStartHandler: (() => void) | null = null;
@@ -94,10 +100,14 @@
     if (!map) return;
     const L = await import("leaflet");
     const nodes: NodeResponse[] = await fetchNodes();
+    unlocatedNodes = [];
 
     for (const node of nodes) {
-      if (node.lat == null || node.lon == null) continue;
       nodeData.set(node.node_id, node);
+      if (!node.location_confirmed || node.lat == null || node.lon == null) {
+        unlocatedNodes.push(node);
+        continue;
+      }
 
       const color = nodeColor(node);
       const icon = await makeNodeIcon(color);
@@ -233,11 +243,17 @@
     if (map) map.getContainer().style.cursor = "";
 
     if (restorePosition && marker) {
-      marker.setLatLng([originalLat, originalLon]);
-      editLat = originalLat;
-      editLon = originalLon;
+      if (isNewPlacement) {
+        marker.remove();
+        nodeMarkers.delete(selectedNode!.node_id);
+      } else {
+        marker.setLatLng([originalLat, originalLon]);
+        editLat = originalLat;
+        editLon = originalLon;
+      }
     }
 
+    isNewPlacement = false;
     isDragging = false;
     gpsUnlocked = false;
     closePanel();
@@ -286,6 +302,51 @@
     }
   }
 
+  function cancelPlacement() {
+    if (placementClickHandler && map) {
+      map.off("click", placementClickHandler);
+      placementClickHandler = null;
+    }
+    if (map) map.getContainer().style.cursor = "";
+    pendingNodeId = null;
+  }
+
+  async function startPlacement(node: NodeResponse) {
+    if (!map) return;
+    if (selectedNode) runCleanup({ restorePosition: true });
+    if (pendingNodeId) cancelPlacement();
+
+    pendingNodeId = node.node_id;
+    map.getContainer().style.cursor = "crosshair";
+
+    placementClickHandler = async (e: LeafletMouseEvent) => {
+      if (!map) return;
+      map.off("click", placementClickHandler!);
+      placementClickHandler = null;
+      map.getContainer().style.cursor = "";
+      pendingNodeId = null;
+
+      const L = await import("leaflet");
+      const icon = await makeNodeIcon("#facc15");
+      const marker = L.marker([e.latlng.lat, e.latlng.lng], { icon })
+        .bindTooltip(node.name ?? node.node_id, { permanent: false })
+        .addTo(map!);
+      marker.on("click", () => openPanel(nodeData.get(node.node_id)!));
+      nodeMarkers.set(node.node_id, marker);
+
+      const provisionalNode: NodeResponse = { ...node, lat: e.latlng.lat, lon: e.latlng.lng };
+      nodeData.set(node.node_id, provisionalNode);
+
+      isNewPlacement = true;
+      // openPanel sets gpsUnlocked=false; toggleGps() must be called after it
+      // to start the new placement with GPS already unlocked.
+      openPanel(provisionalNode);
+      toggleGps();
+    };
+
+    map.on("click", placementClickHandler);
+  }
+
   async function handleSave() {
     if (!selectedNode) return;
     saving = true;
@@ -302,9 +363,12 @@
       if (marker) {
         marker.setLatLng([updated.lat!, updated.lon!]);
         marker.getTooltip()?.setContent(updated.name ?? updated.node_id);
+        const newIcon = await makeNodeIcon(nodeColor(updated));
+        marker.setIcon(newIcon);
       }
 
       nodeData.set(updated.node_id, updated);
+      unlocatedNodes = unlocatedNodes.filter((n) => n.node_id !== updated.node_id);
       runCleanup({ restorePosition: false });
     } catch (e) {
       saveError = e instanceof Error ? e.message : "Save failed";
@@ -326,6 +390,7 @@
     ws?.close();
     map?.remove();
     if (escapeHandler) document.removeEventListener("keydown", escapeHandler);
+    if (placementClickHandler && map) map.off("click", placementClickHandler);
   });
 </script>
 
@@ -447,6 +512,32 @@
             onclick={handleSave}
           >{saving ? "Saving…" : "Save"}</button>
         </div>
+      </div>
+    {/if}
+
+    <!-- Nodes without confirmed location -->
+    {#if unlocatedNodes.filter((n) => n.node_id !== selectedNode?.node_id).length > 0}
+      <div class="absolute z-[1000] top-4 right-4 w-56 bg-zinc-900 border border-amber-600 rounded-lg shadow-xl p-3 text-sm">
+        {#if pendingNodeId}
+          <p class="text-amber-400 text-xs mb-2">
+            Click map to place <span class="font-mono">{nodeData.get(pendingNodeId)?.name ?? pendingNodeId}</span>
+          </p>
+          <button
+            class="w-full text-xs text-zinc-400 hover:text-zinc-200 py-1 border border-zinc-700 rounded"
+            onclick={cancelPlacement}
+          >Cancel</button>
+        {:else}
+          <p class="text-amber-400 text-xs font-semibold mb-2">Needs placement</p>
+          {#each unlocatedNodes.filter((n) => n.node_id !== selectedNode?.node_id) as node}
+            <div class="flex items-center justify-between py-1">
+              <span class="font-mono text-xs text-zinc-300 truncate">{node.name ?? node.node_id}</span>
+              <button
+                class="ml-2 text-xs px-2 py-0.5 rounded border border-amber-600 text-amber-400 hover:bg-amber-900/30 shrink-0"
+                onclick={() => startPlacement(node)}
+              >Place</button>
+            </div>
+          {/each}
+        {/if}
       </div>
     {/if}
   </div>
