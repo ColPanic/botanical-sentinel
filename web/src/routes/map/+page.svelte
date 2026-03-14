@@ -166,14 +166,15 @@
 
   // ── Edit panel ──────────────────────────────────────────────────────────────
   function openPanel(node: NodeResponse) {
+    if (node.lat == null || node.lon == null) return;
     if (selectedNode) runCleanup({ restorePosition: true });
 
     selectedNode = node;
     editName = node.name ?? "";
-    editLat = node.lat!;
-    editLon = node.lon!;
-    originalLat = node.lat!;
-    originalLon = node.lon!;
+    editLat = node.lat;
+    editLon = node.lon;
+    originalLat = node.lat;
+    originalLon = node.lon;
     saveError = null;
     gpsUnlocked = false;
     isDragging = false;
@@ -413,7 +414,7 @@
               step="any"
               bind:value={editLat}
               readonly={!gpsUnlocked}
-              class="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:border-zinc-400 disabled:opacity-50"
+              class="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:border-zinc-400"
               class:opacity-50={!gpsUnlocked}
             />
           </label>
@@ -424,7 +425,7 @@
               step="any"
               bind:value={editLon}
               readonly={!gpsUnlocked}
-              class="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:border-zinc-400 disabled:opacity-50"
+              class="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:border-zinc-400"
               class:opacity-50={!gpsUnlocked}
             />
           </label>
