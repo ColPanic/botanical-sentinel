@@ -74,3 +74,5 @@ SELECT add_retention_policy(
     INTERVAL '30 days',
     if_not_exists => TRUE
 );
+
+ALTER TABLE nodes ADD COLUMN IF NOT EXISTS name TEXT;
