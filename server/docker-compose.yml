@@ -50,6 +50,17 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  web:
+    build: ../web
+    environment:
+      PUBLIC_API_URL: ${PUBLIC_API_URL}
+      ORIGIN: ${ORIGIN}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
 volumes:
   mosquitto_data:
   timescaledb_data:
