@@ -117,8 +117,13 @@ async def test_upsert_node_with_location_confirmed(mock_pool):
     from mqtt_bridge.db import upsert_node
 
     await upsert_node(
-        pool, "scanner-01", firmware_ver="0.2.0", ip="10.0.0.1",
-        lat=38.123, lon=-122.456, location_confirmed=True,
+        pool,
+        "scanner-01",
+        firmware_ver="0.2.0",
+        ip="10.0.0.1",
+        lat=38.123,
+        lon=-122.456,
+        location_confirmed=True,
     )
     call_args = conn.execute.call_args[0]
     sql = call_args[0]
@@ -129,10 +134,12 @@ async def test_upsert_node_with_location_confirmed(mock_pool):
 
 async def test_load_confirmed_node_coords(mock_pool):
     pool, conn = mock_pool
-    conn.fetch = AsyncMock(return_value=[
-        {"node_id": "scanner-01", "lat": 38.123, "lon": -122.456},
-        {"node_id": "scanner-02", "lat": 51.500, "lon": -0.100},
-    ])
+    conn.fetch = AsyncMock(
+        return_value=[
+            {"node_id": "scanner-01", "lat": 38.123, "lon": -122.456},
+            {"node_id": "scanner-02", "lat": 51.500, "lon": -0.100},
+        ]
+    )
     from mqtt_bridge.db import load_confirmed_node_coords
 
     result = await load_confirmed_node_coords(pool)
