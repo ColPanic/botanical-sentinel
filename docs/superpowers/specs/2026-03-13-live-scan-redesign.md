@@ -168,6 +168,8 @@ tag === 'ignored'          →  excluded (never added to presence map)
 
 The 30-minute "new" window is a module-level constant (`NEW_DEVICE_WINDOW_MS = 30 * 60 * 1000`).
 
+Note: `first_seen` (used for "new" classification) and `last_seen` (used for pre-population filtering) are independent fields. A device first seen hours ago but active in the last 5 minutes will appear in "Here Now" but will be classified `unknown`, not `new`. This is intentional.
+
 ### Pre-population (on mount)
 
 1. Fetch `GET /devices` → build device lookup table
@@ -181,7 +183,7 @@ On each `scan_events` message:
 1. For each device in `payload.devices`:
    - Look up MAC in device table to get category, label, vendor
    - Update `lastSeen` and `rssi` in presence map
-   - If MAC was **not** in presence map → arrival; add to map; if category is not `unknown` → prepend feed event
+   - If MAC was **not** in presence map → arrival; add to map; if category is not `unknown` → prepend feed event. Devices already in the map (including those pre-populated on mount) are updated in place — no arrival event is generated.
 2. `position_estimates` messages are ignored on this page
 
 ### Departure detection
@@ -213,3 +215,4 @@ A `setInterval` runs every 30 seconds. For each entry in the presence map:
 - Configuring the stale timeout or new-device window in the UI
 - Departure detection via server push (remains client-side timer for now)
 - Labelling devices from this page
+- Live device table refresh: the `GET /devices` lookup is fetched once on mount and never re-fetched. If a device is re-tagged while the page is open, it will be misclassified until the next page load.
