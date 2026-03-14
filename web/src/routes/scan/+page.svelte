@@ -67,10 +67,27 @@
 
       const existing = presenceMap.get(device.mac);
       if (existing) {
+        const firstConfirmation = existing.node_id === "—";
         existing.lastSeen = now;
         existing.rssi = device.rssi;
         existing.node_id = batch.node_id;
         presenceMap = presenceMap;
+
+        if (firstConfirmation && hasFeedEvent(existing.category)) {
+          feed = [
+            {
+              id: crypto.randomUUID(),
+              direction: "arrival" as const,
+              category: existing.category,
+              mac: device.mac,
+              label: existing.label,
+              vendor: existing.vendor,
+              node_id: batch.node_id,
+              time: now,
+            },
+            ...feed,
+          ].slice(0, MAX_FEED_EVENTS);
+        }
       } else {
         const entry: PresenceEntry = {
           mac: device.mac,
