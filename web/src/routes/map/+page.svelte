@@ -350,11 +350,11 @@
           if (n) openPanel(n);
         });
         nodeMarkers.set(node.node_id, marker);
+        isNewPlacement = true;
 
         const provisionalNode: NodeResponse = { ...node, lat: e.latlng.lat, lon: e.latlng.lng };
         nodeData.set(node.node_id, provisionalNode);
 
-        isNewPlacement = true;
         // openPanel sets gpsUnlocked=false; toggleGps() must be called after it
         // to start the new placement with GPS already unlocked.
         openPanel(provisionalNode);
