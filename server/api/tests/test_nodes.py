@@ -22,6 +22,7 @@ def client_with_nodes():
                 "firmware_ver": "0.2.0",
                 "lat": 38.123,
                 "lon": -122.456,
+                "name": None,
             }
         ]
     )
