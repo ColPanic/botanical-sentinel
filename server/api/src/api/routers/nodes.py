@@ -9,8 +9,7 @@ from api.models import NodeResponse, NodeUpdate
 router = APIRouter(prefix="/nodes", tags=["nodes"])
 
 _NODE_SELECT = (
-    "SELECT node_id, node_type, location, last_seen, firmware_ver, lat, lon, name "
-    "FROM nodes"
+    "SELECT node_id, node_type, location, last_seen, firmware_ver, lat, lon, name FROM nodes"
 )
 
 

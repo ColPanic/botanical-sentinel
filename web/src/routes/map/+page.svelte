@@ -413,7 +413,7 @@
               type="number"
               step="any"
               bind:value={editLat}
-              readonly={!gpsUnlocked}
+              disabled={!gpsUnlocked}
               class="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:border-zinc-400"
               class:opacity-50={!gpsUnlocked}
             />
@@ -424,7 +424,7 @@
               type="number"
               step="any"
               bind:value={editLon}
-              readonly={!gpsUnlocked}
+              disabled={!gpsUnlocked}
               class="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:border-zinc-400"
               class:opacity-50={!gpsUnlocked}
             />
