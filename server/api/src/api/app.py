@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
 import asyncpg
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import DB_URL
 from api.routers.live import _listen_loop
@@ -20,6 +22,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="botanical-sentinel API", version="0.1.0", lifespan=lifespan)
+
+# Allow the web dashboard origin to make browser-side requests.
+# CORS_ORIGIN defaults to "*" for local dev; set it to the exact web URL in production.
+_cors_origin = os.environ.get("CORS_ORIGIN", "*")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[_cors_origin] if _cors_origin != "*" else ["*"],
+    allow_methods=["GET", "PUT"],
+    allow_headers=["Content-Type"],
+)
 
 
 async def get_pool(request: Request) -> asyncpg.Pool:

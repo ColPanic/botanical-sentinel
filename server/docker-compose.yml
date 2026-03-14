@@ -43,6 +43,7 @@ services:
     build: ./api
     environment:
       DB_URL: postgresql://botanical:${DB_PASSWORD}@timescaledb:5432/botanical
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
     ports:
       - "8000:8000"
     depends_on:
