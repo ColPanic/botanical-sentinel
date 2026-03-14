@@ -90,6 +90,13 @@ def test_patch_node_partial_coords_rejected(client_nodes_patch):
     assert resp.status_code == 422
 
 
+def test_patch_node_name_only_rejected(client_nodes_patch):
+    # Coordinates are always required — name-only patch is not supported
+    client, _ = client_nodes_patch
+    resp = client.patch("/nodes/scanner-01", json={"name": "X"})
+    assert resp.status_code == 422
+
+
 def test_patch_node_trims_and_nulls_whitespace_name(client_nodes_patch):
     client, conn = client_nodes_patch
     resp = client.patch("/nodes/scanner-01", json={"name": "  ", "lat": 51.5, "lon": -0.1})
