@@ -107,7 +107,7 @@
         .bindTooltip(label, { permanent: false })
         .addTo(map!);
 
-      marker.on("click", () => openPanel(node));
+      marker.on("click", () => openPanel(nodeData.get(node.node_id) ?? node));
       nodeMarkers.set(node.node_id, marker);
     }
   }
@@ -224,10 +224,10 @@
     if (marker) {
       if (marker.dragging) marker.dragging.disable();
       removeDragListeners(marker);
-      if (mapClickHandler && map) {
-        map.off("click", mapClickHandler);
-        mapClickHandler = null;
-      }
+    }
+    if (mapClickHandler && map) {
+      map.off("click", mapClickHandler);
+      mapClickHandler = null;
     }
     if (map) map.getContainer().style.cursor = "";
 
@@ -304,23 +304,7 @@
       }
 
       nodeData.set(updated.node_id, updated);
-
-      // Cleanup without restoring position (save succeeded)
-      if (escapeHandler) {
-        document.removeEventListener("keydown", escapeHandler);
-        escapeHandler = null;
-      }
-      if (marker) {
-        if (marker.dragging) marker.dragging.disable();
-        removeDragListeners(marker);
-      }
-      if (mapClickHandler && map) {
-        map.off("click", mapClickHandler);
-        mapClickHandler = null;
-      }
-      if (map) map.getContainer().style.cursor = "";
-
-      closePanel();
+      runCleanup({ restorePosition: false });
     } catch (e) {
       saveError = e instanceof Error ? e.message : "Save failed";
     } finally {
