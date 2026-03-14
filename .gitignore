@@ -30,3 +30,4 @@ web/build/
 
 # macOS
 .DS_Store
+.superpowers/
