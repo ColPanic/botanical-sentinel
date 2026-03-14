@@ -30,7 +30,10 @@ async def upsert_node(
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO nodes (node_id, node_type, last_seen, firmware_ver, lat, lon, location_confirmed)
+            INSERT INTO nodes (
+                node_id, node_type, last_seen, firmware_ver, lat, lon,
+                location_confirmed
+            )
             VALUES ($1, 'esp32_scanner', now(), $2, $3, $4, $5)
             ON CONFLICT (node_id) DO UPDATE SET
                 last_seen    = now(),
@@ -59,9 +62,7 @@ async def load_confirmed_node_coords(pool: asyncpg.Pool) -> dict[str, tuple[floa
     return {row["node_id"]: (row["lat"], row["lon"]) for row in rows}
 
 
-async def get_confirmed_node_coords(
-    pool: asyncpg.Pool, node_id: str
-) -> tuple[float, float] | None:
+async def get_confirmed_node_coords(pool: asyncpg.Pool, node_id: str) -> tuple[float, float] | None:
     """Return confirmed lat/lon for a single node, or None if not confirmed."""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
