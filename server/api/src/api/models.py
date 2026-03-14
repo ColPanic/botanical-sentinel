@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class NodeResponse(BaseModel):
@@ -19,8 +19,8 @@ class NodeResponse(BaseModel):
 
 class NodeUpdate(BaseModel):
     name: Annotated[str, Field(max_length=100)] | None = None
-    lat: float | None = None
-    lon: float | None = None
+    lat: float
+    lon: float
 
     @field_validator("name", mode="before")
     @classmethod
@@ -29,16 +29,6 @@ class NodeUpdate(BaseModel):
             v = v.strip()
             return v if v else None
         return v
-
-    @model_validator(mode="after")
-    def _lat_lon_rules(self) -> "NodeUpdate":
-        has_lat = self.lat is not None
-        has_lon = self.lon is not None
-        if has_lat != has_lon:
-            raise ValueError("lat and lon must be provided together")
-        if not has_lat and not has_lon:
-            raise ValueError("lat and lon are required")
-        return self
 
 
 class PositionResponse(BaseModel):
