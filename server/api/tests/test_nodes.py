@@ -20,6 +20,7 @@ NODE_ROW = {
     "lat": 51.5,
     "lon": -0.1,
     "name": None,
+    "location_confirmed": True,
 }
 
 UPDATED_ROW = {**NODE_ROW, "name": "Garage Scanner", "lat": 51.6, "lon": -0.2}
@@ -113,3 +114,23 @@ def test_patch_node_404_when_not_found(client_nodes_patch_404):
         json={"name": "X", "lat": 1.0, "lon": 2.0},
     )
     assert resp.status_code == 404
+
+
+def test_list_nodes_includes_location_confirmed(client_nodes_list):
+    client, _ = client_nodes_list
+    resp = client.get("/nodes")
+    assert resp.status_code == 200
+    assert "location_confirmed" in resp.json()[0]
+    assert resp.json()[0]["location_confirmed"] is True
+
+
+def test_patch_node_sets_location_confirmed_true(client_nodes_patch):
+    client, conn = client_nodes_patch
+    resp = client.patch(
+        "/nodes/scanner-01",
+        json={"name": "Garage Scanner", "lat": 51.6, "lon": -0.2},
+    )
+    assert resp.status_code == 200
+    sql = conn.fetchrow.call_args[0][0]
+    assert "location_confirmed" in sql.lower()
+    assert "true" in sql.lower()

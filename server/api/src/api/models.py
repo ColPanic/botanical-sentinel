@@ -15,6 +15,7 @@ class NodeResponse(BaseModel):
     lat: float | None
     lon: float | None
     name: str | None
+    location_confirmed: bool
 
 
 class NodeUpdate(BaseModel):
