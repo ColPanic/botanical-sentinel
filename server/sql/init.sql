@@ -76,3 +76,6 @@ SELECT add_retention_policy(
 );
 
 ALTER TABLE nodes ADD COLUMN IF NOT EXISTS name TEXT;
+
+-- Idempotent migration: track whether a node's location has been confirmed by a user or GPS fix
+ALTER TABLE nodes ADD COLUMN IF NOT EXISTS location_confirmed BOOLEAN NOT NULL DEFAULT FALSE;
