@@ -62,7 +62,7 @@ async def handle_status(pool: asyncpg.Pool, topic: str, payload: bytes) -> None:
     lat: float | None = None
     lon: float | None = None
     location_confirmed = False
-    if data.get("gps_fix") and "gps_lat" in data:
+    if data.get("gps_fix") and "gps_lat" in data and "gps_lon" in data:
         lat, lon = float(data["gps_lat"]), float(data["gps_lon"])
         location_confirmed = True
     # Firmware-reported node_lat/node_lon are intentionally ignored.
