@@ -99,6 +99,13 @@
   async function loadNodes() {
     if (!map) return;
     const L = await import("leaflet");
+
+    // Clear existing node markers before reloading
+    for (const marker of nodeMarkers.values()) {
+      marker.remove();
+    }
+    nodeMarkers.clear();
+
     const nodes: NodeResponse[] = await fetchNodes();
     unlocatedNodes = [];
 
@@ -217,8 +224,14 @@
   }
 
   function removeDragListeners(marker: Marker) {
-    if (dragStartHandler) { marker.off("dragstart", dragStartHandler); dragStartHandler = null; }
-    if (dragEndHandler) { marker.off("dragend", dragEndHandler); dragEndHandler = null; }
+    if (dragStartHandler) {
+      marker.off("dragstart", dragStartHandler);
+      dragStartHandler = null;
+    }
+    if (dragEndHandler) {
+      marker.off("dragend", dragEndHandler);
+      dragEndHandler = null;
+    }
   }
 
   // Remove all editing listeners and optionally restore marker position.
@@ -326,22 +339,30 @@
       map.getContainer().style.cursor = "";
       pendingNodeId = null;
 
-      const L = await import("leaflet");
-      const icon = await makeNodeIcon("#facc15");
-      const marker = L.marker([e.latlng.lat, e.latlng.lng], { icon })
-        .bindTooltip(node.name ?? node.node_id, { permanent: false })
-        .addTo(map!);
-      marker.on("click", () => openPanel(nodeData.get(node.node_id)!));
-      nodeMarkers.set(node.node_id, marker);
+      try {
+        const L = await import("leaflet");
+        const icon = await makeNodeIcon("#facc15");
+        const marker = L.marker([e.latlng.lat, e.latlng.lng], { icon })
+          .bindTooltip(node.name ?? node.node_id, { permanent: false })
+          .addTo(map!);
+        marker.on("click", () => {
+          const n = nodeData.get(node.node_id);
+          if (n) openPanel(n);
+        });
+        nodeMarkers.set(node.node_id, marker);
 
-      const provisionalNode: NodeResponse = { ...node, lat: e.latlng.lat, lon: e.latlng.lng };
-      nodeData.set(node.node_id, provisionalNode);
+        const provisionalNode: NodeResponse = { ...node, lat: e.latlng.lat, lon: e.latlng.lng };
+        nodeData.set(node.node_id, provisionalNode);
 
-      isNewPlacement = true;
-      // openPanel sets gpsUnlocked=false; toggleGps() must be called after it
-      // to start the new placement with GPS already unlocked.
-      openPanel(provisionalNode);
-      toggleGps();
+        isNewPlacement = true;
+        // openPanel sets gpsUnlocked=false; toggleGps() must be called after it
+        // to start the new placement with GPS already unlocked.
+        openPanel(provisionalNode);
+        toggleGps();
+      } catch (err) {
+        console.error("Placement failed", err);
+        // Nothing was added to the map — unlocatedNodes still contains this node so the user can retry.
+      }
     };
 
     map.on("click", placementClickHandler);
@@ -361,7 +382,9 @@
 
       const marker = nodeMarkers.get(updated.node_id);
       if (marker) {
-        marker.setLatLng([updated.lat!, updated.lon!]);
+        if (updated.lat != null && updated.lon != null) {
+          marker.setLatLng([updated.lat, updated.lon]);
+        }
         marker.getTooltip()?.setContent(updated.name ?? updated.node_id);
         const newIcon = await makeNodeIcon(nodeColor(updated));
         marker.setIcon(newIcon);
@@ -385,6 +408,8 @@
     ws.onclose = () => (connected = false);
     ws.onerror = () => (connected = false);
   });
+
+  $: visibleUnlocatedNodes = unlocatedNodes.filter((n) => n.node_id !== selectedNode?.node_id);
 
   onDestroy(() => {
     ws?.close();
@@ -516,7 +541,7 @@
     {/if}
 
     <!-- Nodes without confirmed location -->
-    {#if unlocatedNodes.filter((n) => n.node_id !== selectedNode?.node_id).length > 0}
+    {#if visibleUnlocatedNodes.length > 0}
       <div class="absolute z-[1000] top-4 right-4 w-56 bg-zinc-900 border border-amber-600 rounded-lg shadow-xl p-3 text-sm">
         {#if pendingNodeId}
           <p class="text-amber-400 text-xs mb-2">
@@ -528,7 +553,7 @@
           >Cancel</button>
         {:else}
           <p class="text-amber-400 text-xs font-semibold mb-2">Needs placement</p>
-          {#each unlocatedNodes.filter((n) => n.node_id !== selectedNode?.node_id) as node}
+          {#each visibleUnlocatedNodes as node}
             <div class="flex items-center justify-between py-1">
               <span class="font-mono text-xs text-zinc-300 truncate">{node.name ?? node.node_id}</span>
               <button
