@@ -36,6 +36,14 @@
 
     await loadNodes();
     await loadPositions();
+
+    const allLatLngs = [
+      ...Array.from(nodeMarkers.values()).map((m) => m.getLatLng()),
+      ...Array.from(deviceMarkers.values()).map((m) => m.getLatLng()),
+    ];
+    if (allLatLngs.length > 0) {
+      map.fitBounds(L.latLngBounds(allLatLngs), { padding: [40, 40] });
+    }
   }
 
   async function loadNodes() {
@@ -62,10 +70,6 @@
         .addTo(map);
 
       nodeMarkers.set(node.node_id, marker);
-    }
-
-    if (bounds.length > 0) {
-      map.fitBounds(bounds as [[number, number], [number, number]], { padding: [40, 40] });
     }
   }
 
