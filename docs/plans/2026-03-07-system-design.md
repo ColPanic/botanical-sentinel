@@ -101,7 +101,7 @@ required — nodes can sleep between cycles.
 |-----------|-------|---------|
 | Node → Server | `nodes/{node_id}/scan/wifi` | JSON: SSID, BSSID, RSSI, channel |
 | Node → Server | `nodes/{node_id}/scan/bt` | JSON: MAC, name, RSSI, type |
-| Node → Server | `nodes/{node_id}/status` | JSON: uptime, free heap, IP, firmware version |
+| Node → Server | `nodes/{node_id}/status` | JSON: uptime, free heap, IP, firmware version, wifi_rssi, node_lat, node_lon |
 | Node → Server | `nodes/{node_id}/events` | JSON: PIR trigger, gate state, etc. |
 | Server → Node | `nodes/{node_id}/commands` | JSON: command type + payload |
 
@@ -117,6 +117,9 @@ required — nodes can sleep between cycles.
 | `location` | TEXT | Human label: `front gate`, `barn` |
 | `last_seen` | TIMESTAMPTZ | |
 | `firmware_ver` | TEXT | |
+| `lat` | DOUBLE PRECISION | |
+| `lon` | DOUBLE PRECISION | |
+| `location_confirmed` | BOOLEAN | One-way latch, set via map placement |
 
 ### `devices`
 | Column | Type | Notes |
@@ -173,6 +176,7 @@ GET  /nodes                      list all nodes + status
 GET  /devices                    list observed devices (filterable by tag)
 PUT  /devices/{mac}/label        set human label
 PUT  /devices/{mac}/tag          set tag
+PATCH /nodes/{node_id}            update node name, location, confirmation
 GET  /scan/recent                last N scan events (all nodes)
 GET  /scan/{node_id}/recent      last N events for a node
 POST /commands/{node_id}         queue a command
@@ -200,6 +204,7 @@ SECRET_KEY=changeme
 | `/nodes` | Node status: location, type, last seen, firmware, staleness indicator |
 | `/devices` | Device registry: MAC, vendor, label, tag, first/last seen. Inline editing. Unknown devices float to top. |
 | `/scan` | Live scan view per node via WebSocket |
+| `/map` | Leaflet map with node and device markers, click-to-place, inline editing, bulk selection |
 | `/commands` | Send commands to nodes, view execution status |
 
 Server-side `+page.server.ts` routes fetch from FastAPI on load. No auth for v1 (private
