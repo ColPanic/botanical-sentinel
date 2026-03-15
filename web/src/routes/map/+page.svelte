@@ -39,6 +39,13 @@
   // ── Device data ─────────────────────────────────────────────────────────────
   const deviceData = new Map<string, PositionResponse>();
 
+  // ── Bulk selection state ────────────────────────────────────────────────────
+  let bulkSelected = new Set<string>();
+  let bulkTag = "";
+  let bulkLabel = "";
+  let bulkApplying = false;
+  let bulkError: string | null = null;
+
   // ── Device edit panel state ────────────────────────────────────────────────
   let devicePanelEl: HTMLDivElement | undefined;
   let selectedDevice: PositionResponse | null = null;
@@ -177,8 +184,89 @@
       })
         .bindTooltip(pos.label ?? pos.mac, { permanent: false })
         .addTo(map!);
-      marker.on("click", () => selectDevice(pos.mac));
+      marker.on("click", (e: LeafletMouseEvent) => handleDeviceClick(e, pos.mac));
       deviceMarkers.set(pos.mac, marker);
+    }
+  }
+
+  function handleDeviceClick(e: LeafletMouseEvent, mac: string) {
+    if (e.originalEvent.shiftKey) {
+      toggleBulkSelect(mac);
+      return;
+    }
+    // Normal click — clear bulk selection if any
+    if (bulkSelected.size > 0) clearBulkSelection();
+    selectDevice(mac);
+  }
+
+  function toggleBulkSelect(mac: string) {
+    // Close any open panels when starting bulk selection
+    if (selectedDevice) closeDevicePanel();
+    if (selectedNode) runCleanup({ restorePosition: true });
+
+    if (bulkSelected.has(mac)) {
+      bulkSelected.delete(mac);
+    } else {
+      bulkSelected.add(mac);
+    }
+    bulkSelected = bulkSelected; // trigger reactivity
+    updateBulkHighlights();
+  }
+
+  function clearBulkSelection() {
+    bulkSelected = new Set();
+    bulkTag = "";
+    bulkLabel = "";
+    bulkError = null;
+    updateBulkHighlights();
+  }
+
+  function updateBulkHighlights() {
+    for (const [mac, marker] of deviceMarkers) {
+      const pos = deviceData.get(mac);
+      const baseColor = TAG_COLORS[pos?.tag ?? "unknown"] ?? TAG_COLORS.unknown;
+      if (bulkSelected.has(mac)) {
+        marker.setStyle({ color: "#fff", fillColor: baseColor, fillOpacity: 0.8, weight: 3 });
+      } else {
+        marker.setStyle({ color: baseColor, fillColor: baseColor, fillOpacity: 0.4, weight: 2 });
+      }
+    }
+  }
+
+  async function applyBulkEdit() {
+    if (bulkSelected.size === 0) return;
+    bulkApplying = true;
+    bulkError = null;
+    try {
+      const promises: Promise<unknown>[] = [];
+      for (const mac of bulkSelected) {
+        if (bulkTag) promises.push(setDeviceTag(mac, bulkTag));
+        if (bulkLabel.trim()) promises.push(setDeviceLabel(mac, bulkLabel.trim()));
+      }
+      await Promise.all(promises);
+
+      // Update local state and markers
+      for (const mac of bulkSelected) {
+        const pos = deviceData.get(mac);
+        if (pos) {
+          const updated = { ...pos };
+          if (bulkTag) updated.tag = bulkTag;
+          if (bulkLabel.trim()) updated.label = bulkLabel.trim();
+          deviceData.set(mac, updated);
+        }
+        const marker = deviceMarkers.get(mac);
+        if (marker) {
+          const newTag = bulkTag || pos?.tag || "unknown";
+          const color = TAG_COLORS[newTag] ?? TAG_COLORS.unknown;
+          marker.setStyle({ color, fillColor: color, fillOpacity: 0.4, weight: 2 });
+          if (bulkLabel.trim()) marker.getTooltip()?.setContent(bulkLabel.trim());
+        }
+      }
+      clearBulkSelection();
+    } catch (e) {
+      bulkError = e instanceof Error ? e.message : "Bulk edit failed";
+    } finally {
+      bulkApplying = false;
     }
   }
 
@@ -709,6 +797,45 @@
             onclick={handleDeviceSave}
           >{deviceSaving ? "Saving…" : "Save"}</button>
         </div>
+      </div>
+    {/if}
+
+    <!-- Bulk selection action bar -->
+    {#if bulkSelected.size > 0}
+      <div class="absolute z-[1000] bottom-4 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-3 text-sm flex items-center gap-3" style="pointer-events:auto">
+        <span class="text-zinc-300 text-xs font-semibold whitespace-nowrap">{bulkSelected.size} selected</span>
+
+        <select
+          bind:value={bulkTag}
+          class="bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-zinc-100 text-xs"
+        >
+          <option value="">Tag…</option>
+          {#each TAGS as tag}
+            <option value={tag}>{tag.replace("_", " ")}</option>
+          {/each}
+        </select>
+
+        <input
+          type="text"
+          bind:value={bulkLabel}
+          placeholder="Label…"
+          class="bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-zinc-100 text-xs w-32"
+        />
+
+        <button
+          disabled={bulkApplying || (!bulkTag && !bulkLabel.trim())}
+          class="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white rounded px-3 py-1 text-xs whitespace-nowrap"
+          onclick={applyBulkEdit}
+        >{bulkApplying ? "Applying…" : "Apply"}</button>
+
+        <button
+          class="text-zinc-500 hover:text-zinc-200 text-xs"
+          onclick={clearBulkSelection}
+        >Clear</button>
+
+        {#if bulkError}
+          <span class="text-red-400 text-xs">{bulkError}</span>
+        {/if}
       </div>
     {/if}
 
