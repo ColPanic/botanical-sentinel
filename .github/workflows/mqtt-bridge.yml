@@ -43,3 +43,7 @@ jobs:
 
       - name: Test
         run: pytest -q
+        env:
+          MQTT_HOST: localhost
+          MQTT_PORT: '1883'
+          DB_URL: postgresql://test:test@localhost:5432/test

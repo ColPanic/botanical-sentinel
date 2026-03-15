@@ -29,10 +29,10 @@ SD card MOSI/MISO/SCK share the SPI bus (GPIO 11/12/13).
 nodes/esp32-scanner/     — ESP32-S3 scanner node (WiFi+BLE scan + TFT display)
   platformio.ini         — PlatformIO config (ESP32-S3 devkitc-1, Arduino framework)
   src/main.cpp           — Scanner sketch
-nodes/pi-camera/         — Raspberry Pi camera node (future)
-nodes/pi-lora-gateway/   — Raspberry Pi LoRa gateway (future)
-server/                  — FastAPI backend + MQTT bridge (future)
-web/                     — SvelteKit frontend (future)
+nodes/ttgo-lora32/       — TTGO T-Beam V1.1 node (WiFi+BLE+GPS+LoRa + OLED)
+server/mqtt_bridge/      — MQTT→TimescaleDB bridge
+server/api/              — FastAPI REST API + WebSocket
+web/                     — SvelteKit frontend (adapter-node)
 ```
 
 ## Key Decisions
@@ -64,12 +64,23 @@ cp .env.example .env   # fill in DB_PASSWORD
 docker compose up -d
 ```
 
-Services: Mosquitto (1883), TimescaleDB (5432), mqtt_bridge (subscriber).
+Services: Mosquitto (1883), TimescaleDB (5432), mqtt_bridge, FastAPI (8000), web (3000).
 Schema applied automatically from `sql/init.sql` on first TimescaleDB start.
+
+## Web Stack
+
+- SvelteKit (adapter-node) on port 3000, FastAPI on port 8000
+- Vite dev proxy (`vite.config.ts`) forwards `/nodes`, `/devices`, `/scan`, `/positions` to FastAPI
+- Proxy uses `bypass` to skip SvelteKit-internal `__data.json` requests — do not remove this
+- Leaflet for maps; tooltips inject outside Svelte's scoped DOM — use `:global()` for tooltip CSS
+- Verify before committing: `cd web && npm run check && npm run build`
+- Pages: `/nodes`, `/devices`, `/scan`, `/map` (live WebSocket)
 
 ## Status
 
-- [ ] Hardware wiring (use wiring diagram above)
-- [x] PlatformIO project + TFT_eSPI configured
-- [x] Test sketch written (color cycle + Hello World)
-- [ ] Flash and verify on hardware
+- [x] ESP32-S3 scanner node (WiFi+BLE scan, MQTT publish)
+- [x] TTGO T-Beam node (WiFi+BLE+GPS, MQTT publish)
+- [x] Server stack (Mosquitto, TimescaleDB, mqtt_bridge, FastAPI, SvelteKit)
+- [x] Web dashboard (nodes, devices, scan, map with live WebSocket)
+- [ ] ESP32-S3 TFT display regression (tracked: esp_bot-i60)
+- [ ] LoRa uplink (waiting on hardware)

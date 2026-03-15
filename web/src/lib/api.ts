@@ -111,6 +111,7 @@ export type NodeResponse = {
   lat: number | null;
   lon: number | null;
   name: string | null;
+  location_confirmed: boolean;
 };
 
 export async function fetchCurrentPositions(tag?: string): Promise<PositionResponse[]> {

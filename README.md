@@ -11,7 +11,7 @@ web UI for device tagging and management.
 | Node | Board | Role | Status |
 |------|-------|------|--------|
 | `esp32-scanner` | ESP32-S3-WROOM-1 + ILI9341 TFT 240×320 | WiFi+BLE passive scan | Working |
-| `ttgo-lora32` | TTGO LoRa32 V1.1 + SSD1306 OLED 128×64 | WiFi+BLE passive scan | Working |
+| `ttgo-lora32` | TTGO T-Beam V1.1 + SSD1306 OLED 128×64 + GPS | WiFi+BLE passive scan | Working |
 | `pi-camera` | Raspberry Pi 4-B + camera module | Motion detection, RTSP | Planned |
 | `pi-lora-gateway` | Raspberry Pi 4-B + LoRa hat | LoRa → MQTT bridge | Planned |
 | Server | x86_64 Linux | MQTT, database, API, web UI | Working |
@@ -21,13 +21,13 @@ web UI for device tagging and management.
 ```
 nodes/
   esp32-scanner/   ESP32-S3 + ILI9341 TFT scanner node
-  ttgo-lora32/     TTGO LoRa32 V1.1 + SSD1306 OLED scanner node
+  ttgo-lora32/     TTGO T-Beam V1.1 + SSD1306 OLED + GPS scanner node
 server/
   docker-compose.yml   Mosquitto, TimescaleDB, MQTT bridge, FastAPI
   mqtt_bridge/         Python subscriber — MQTT → TimescaleDB
   api/                 FastAPI REST + WebSocket endpoints
   sql/init.sql         Schema (applied automatically on first start)
-web/                 SvelteKit dashboard (nodes, devices, live scan feed)
+web/                 SvelteKit dashboard (nodes, devices, map, live scan feed)
 docs/plans/          Architecture and design documents
 ```
 
@@ -77,7 +77,7 @@ make monitor
 See [nodes/esp32-scanner/README.md](nodes/esp32-scanner/README.md) for wiring details and
 the TFT display layout.
 
-### 3. Firmware — TTGO LoRa32 scanner
+### 3. Firmware — TTGO T-Beam scanner
 
 ```bash
 # Create config — same shape as esp32-scanner
@@ -87,9 +87,8 @@ $EDITOR nodes/ttgo-lora32/src/config.h
 # Build
 make firmware-lora
 
-# Flash (OLED variant) — CH340 auto-resets, no manual bootloader step needed
-# Find your port: ls /dev/cu.usbserial-*
-make flash-lora-oled LORA_PORT=/dev/cu.usbserial-XXXX
+# Flash (OLED variant) — CP2102 auto-resets, no manual bootloader step needed
+make flash-lora-oled LORA_PORT=/dev/cu.SLAB_USBtoUART
 
 # Monitor serial output
 make monitor-lora
@@ -121,7 +120,7 @@ make monitor-lora          Serial monitor for ttgo-lora32
 The ESP32-S3 board uses native USB with no UART chip. Manual bootloader entry is required
 before every flash: hold **BOOT**, press+release **RESET**, release **BOOT**.
 
-The TTGO LoRa32 has a CH340 UART chip. Flashing auto-resets the board — no manual step.
+The TTGO T-Beam has a CP2102 UART chip. Flashing auto-resets the board — no manual step.
 
 ## config.h
 
@@ -145,7 +144,7 @@ Each node publishes to three topics (NODE_ID comes from `config.h`):
 |-------|---------|----------|
 | `nodes/<NODE_ID>/scan/wifi` | JSON array of WiFi networks (SSID, BSSID, RSSI, channel) | Every 30s |
 | `nodes/<NODE_ID>/scan/bt` | JSON array of BLE devices (MAC, name, RSSI) | Every 30s |
-| `nodes/<NODE_ID>/status` | JSON object (uptime_ms, free_heap, IP, firmware_ver) | Every 30s |
+| `nodes/<NODE_ID>/status` | JSON object (uptime_ms, free_heap, IP, firmware_ver, wifi_rssi, node_lat, node_lon) | Every 30s |
 
 The MQTT bridge subscribes to `nodes/+/scan/+` and `nodes/+/status` and writes all
 messages to TimescaleDB. The API exposes them over REST and WebSocket.

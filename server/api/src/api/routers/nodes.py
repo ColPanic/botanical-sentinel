@@ -9,7 +9,8 @@ from api.models import NodeResponse, NodeUpdate
 router = APIRouter(prefix="/nodes", tags=["nodes"])
 
 _NODE_SELECT = (
-    "SELECT node_id, node_type, location, last_seen, firmware_ver, lat, lon, name FROM nodes"
+    "SELECT node_id, node_type, location, last_seen, firmware_ver, lat, lon, name,"
+    " location_confirmed FROM nodes"
 )
 
 
@@ -28,7 +29,12 @@ async def update_node(
 ):
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "UPDATE nodes SET name=$1, lat=$2, lon=$3 WHERE node_id=$4 RETURNING *",
+            """
+            UPDATE nodes
+            SET name = $1, lat = $2, lon = $3, location_confirmed = true
+            WHERE node_id = $4
+            RETURNING *
+            """,
             body.name,
             body.lat,
             body.lon,

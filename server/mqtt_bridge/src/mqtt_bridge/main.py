@@ -8,7 +8,13 @@ import aiomqtt
 import asyncpg
 
 from mqtt_bridge.config import DB_URL, MQTT_HOST, MQTT_PORT
-from mqtt_bridge.db import insert_scan_events, upsert_devices, upsert_node
+from mqtt_bridge.db import (
+    get_confirmed_node_coords,
+    insert_scan_events,
+    load_confirmed_node_coords,
+    upsert_devices,
+    upsert_node,
+)
 from mqtt_bridge.estimator import run_estimator
 from mqtt_bridge.handler import extract_node_id, parse_ble, parse_wifi
 
@@ -18,7 +24,8 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# Populated by handle_status; used by handle_scan to stamp node position onto events.
+# Populated from confirmed DB records at startup and refreshed on each status message.
+# Only nodes with location_confirmed=true in the DB ever appear here.
 _node_coords: dict[str, tuple[float, float]] = {}
 
 
@@ -36,9 +43,12 @@ async def handle_scan(pool: asyncpg.Pool, topic: str, payload: bytes) -> None:
         return
 
     coords = _node_coords.get(node_id)
-    if coords:
-        for e in events:
-            e.node_lat, e.node_lon = coords
+    if coords is None:
+        log.debug("node=%s has no confirmed location — scan dropped", node_id)
+        return
+
+    for e in events:
+        e.node_lat, e.node_lon = coords
 
     await upsert_devices(pool, events)
     await insert_scan_events(pool, events)
@@ -51,13 +61,12 @@ async def handle_status(pool: asyncpg.Pool, topic: str, payload: bytes) -> None:
 
     lat: float | None = None
     lon: float | None = None
-    if data.get("gps_fix") and "gps_lat" in data:
+    location_confirmed = False
+    if data.get("gps_fix") and "gps_lat" in data and "gps_lon" in data:
         lat, lon = float(data["gps_lat"]), float(data["gps_lon"])
-    elif "node_lat" in data and "node_lon" in data:
-        lat, lon = float(data["node_lat"]), float(data["node_lon"])
-
-    if lat is not None and lon is not None:
-        _node_coords[node_id] = (lat, lon)
+        location_confirmed = True
+    # Firmware-reported node_lat/node_lon are intentionally ignored.
+    # Location for fixed nodes is only confirmed by the user via PATCH /nodes/{id}.
 
     await upsert_node(
         pool,
@@ -66,7 +75,14 @@ async def handle_status(pool: asyncpg.Pool, topic: str, payload: bytes) -> None:
         ip=data.get("ip", ""),
         lat=lat,
         lon=lon,
+        location_confirmed=location_confirmed,
     )
+
+    # Refresh this node's confirmed coords from DB (picks up API-set locations too).
+    coords = await get_confirmed_node_coords(pool, node_id)
+    if coords:
+        _node_coords[node_id] = coords
+
     log.info("node=%s status uptime_ms=%s lat=%s lon=%s", node_id, data.get("uptime_ms"), lat, lon)
 
 
@@ -104,4 +120,9 @@ async def main() -> None:
     log.info("Connecting to database")
     pool = await asyncpg.create_pool(DB_URL, min_size=2, max_size=5)
     log.info("Database connected")
+
+    confirmed = await load_confirmed_node_coords(pool)
+    _node_coords.update(confirmed)
+    log.info("Loaded %d confirmed node location(s) from DB", len(confirmed))
+
     await run(pool)

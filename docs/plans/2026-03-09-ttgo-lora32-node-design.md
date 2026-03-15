@@ -14,7 +14,7 @@ LoRa uplink is out of scope until the LoRa hat for the server arrives.
 ## Hardware
 
 - **MCU**: ESP32 (Xtensa LX6, not S3)
-- **USB serial**: CH340 (auto-reset works — no manual bootloader entry needed)
+- **USB serial**: CP2102 (auto-reset works — no manual bootloader entry needed)
 - **Display**: SSD1306 OLED, 128×64, I2C
   - SDA = GPIO 21
   - SCL = GPIO 22
@@ -45,7 +45,7 @@ New CI workflow `firmware-ttgo.yml` triggers on `nodes/ttgo-lora32/**`.
 | `ttgo-lora32-headless` | `ttgo-lora32-v1` | base only |
 | `ttgo-lora32-oled` | `ttgo-lora32-v1` | Adafruit_SSD1306 + GFX, `-D HAS_OLED=1` |
 
-No `ARDUINO_USB_CDC_ON_BOOT` — CH340 handles USB-serial.
+No `ARDUINO_USB_CDC_ON_BOOT` — CP2102 handles USB-serial.
 
 ---
 
@@ -76,7 +76,7 @@ Phone      -67
 | | ESP32-S3 DevKit | TTGO LoRa32 V1.1 |
 |---|---|---|
 | Board ID | `esp32-s3-devkitc-1` | `ttgo-lora32-v1` |
-| USB serial | Native CDC (manual bootloader) | CH340 (auto-reset) |
+| USB serial | Native CDC (manual bootloader) | CP2102 (auto-reset) |
 | `ARDUINO_USB_CDC_ON_BOOT` | Required | Not present |
 | Display bus | SPI | I2C |
 | Display driver | ILI9341 (TFT_eSPI) | SSD1306 (Adafruit) |

@@ -25,23 +25,57 @@ async def upsert_node(
     ip: str,
     lat: float | None = None,
     lon: float | None = None,
+    location_confirmed: bool = False,
 ) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO nodes (node_id, node_type, last_seen, firmware_ver, lat, lon)
-            VALUES ($1, 'esp32_scanner', now(), $2, $3, $4)
+            INSERT INTO nodes (
+                node_id, node_type, last_seen, firmware_ver, lat, lon,
+                location_confirmed
+            )
+            VALUES ($1, 'esp32_scanner', now(), $2, $3, $4, $5)
             ON CONFLICT (node_id) DO UPDATE SET
                 last_seen    = now(),
                 firmware_ver = EXCLUDED.firmware_ver,
                 lat = CASE WHEN $3 IS NOT NULL THEN $3 ELSE nodes.lat END,
-                lon = CASE WHEN $4 IS NOT NULL THEN $4 ELSE nodes.lon END
+                lon = CASE WHEN $4 IS NOT NULL THEN $4 ELSE nodes.lon END,
+                location_confirmed = CASE WHEN $5 THEN TRUE ELSE nodes.location_confirmed END
             """,
             node_id,
             firmware_ver,
             lat,
             lon,
+            location_confirmed,
         )
+
+
+async def load_confirmed_node_coords(pool: asyncpg.Pool) -> dict[str, tuple[float, float]]:
+    """Return confirmed lat/lon for all nodes where location_confirmed is true."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT node_id, lat, lon FROM nodes
+            WHERE location_confirmed = true AND lat IS NOT NULL AND lon IS NOT NULL
+            """
+        )
+    return {row["node_id"]: (row["lat"], row["lon"]) for row in rows}
+
+
+async def get_confirmed_node_coords(pool: asyncpg.Pool, node_id: str) -> tuple[float, float] | None:
+    """Return confirmed lat/lon for a single node, or None if not confirmed."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT lat, lon FROM nodes
+            WHERE node_id = $1 AND location_confirmed = true
+              AND lat IS NOT NULL AND lon IS NOT NULL
+            """,
+            node_id,
+        )
+    if row:
+        return (row["lat"], row["lon"])
+    return None
 
 
 async def upsert_devices(pool: asyncpg.Pool, events: list[ScanEvent]) -> None:
