@@ -10,10 +10,12 @@ export default defineConfig({
 		proxy: {
 			'/live': { target: 'ws://localhost:8000', ws: true },
 			// Proxy REST API routes so the browser can use relative URLs
-			// when PUBLIC_API_URL is not set (see src/lib/api.ts)
-			'/nodes': 'http://localhost:8000',
-			'/devices': 'http://localhost:8000',
-			'/scan': 'http://localhost:8000',
+			// when PUBLIC_API_URL is not set (see src/lib/api.ts).
+			// bypass: pass SvelteKit-internal __data.json requests back to the
+			// dev server instead of forwarding them to FastAPI.
+			'/nodes': { target: 'http://localhost:8000', bypass: (req) => req.url?.includes('__data') ? req.url : undefined },
+			'/devices': { target: 'http://localhost:8000', bypass: (req) => req.url?.includes('__data') ? req.url : undefined },
+			'/scan': { target: 'http://localhost:8000', bypass: (req) => req.url?.includes('__data') ? req.url : undefined },
 			'/positions': 'http://localhost:8000',
 			'/health': 'http://localhost:8000',
 		},
