@@ -8,6 +8,8 @@
     fetchPositionHistory,
     fetchNodes,
     updateNode,
+    setDeviceLabel,
+    setDeviceTag,
   } from "$lib/api";
   import type { PositionResponse, NodeResponse } from "$lib/api";
   import type { CircleMarker } from "leaflet";
@@ -32,7 +34,21 @@
     ignored: "#71717a",
   };
 
-  // ── Edit panel state ────────────────────────────────────────────────────────
+  const TAGS = ["unknown", "known_resident", "known_vehicle", "ignored"];
+
+  // ── Device data ─────────────────────────────────────────────────────────────
+  const deviceData = new Map<string, PositionResponse>();
+
+  // ── Device edit panel state ────────────────────────────────────────────────
+  let devicePanelEl: HTMLDivElement | undefined;
+  let selectedDevice: PositionResponse | null = null;
+  let editDeviceLabel = "";
+  let editDeviceTag = "";
+  let deviceSaveError: string | null = null;
+  let deviceSaving = false;
+  let deviceEscapeHandler: ((e: KeyboardEvent) => void) | null = null;
+
+  // ── Node edit panel state ─────────────────────────────────────────────────
   let panelEl: HTMLDivElement | undefined;
   let selectedNode: NodeResponse | null = null;
   let editName = "";
@@ -98,7 +114,7 @@
       map.fitBounds(L.latLngBounds(allLatLngs), { padding: [40, 40] });
     }
 
-    map.on("move zoom", repositionPanel);
+    map.on("move zoom", () => { repositionPanel(); repositionDevicePanel(); });
   }
 
   async function loadNodes() {
@@ -147,6 +163,7 @@
     const L = await import("leaflet");
     const color = TAG_COLORS[pos.tag] ?? TAG_COLORS.unknown;
     const radius = Math.max(5, Math.min(40, (pos.accuracy_m ?? 20) / 3));
+    deviceData.set(pos.mac, pos);
 
     if (deviceMarkers.has(pos.mac)) {
       deviceMarkers.get(pos.mac)!.setLatLng([pos.lat, pos.lon]);
@@ -168,15 +185,26 @@
   async function selectDevice(mac: string) {
     if (!map) return;
     const L = await import("leaflet");
+
+    // Close any open node panel
+    if (selectedNode) runCleanup({ restorePosition: true });
+
+    // Draw trail
     if (trailLines.has(mac)) {
       trailLines.get(mac)!.remove();
       trailLines.delete(mac);
     }
     const history = await fetchPositionHistory(mac, 100);
-    if (history.length < 2) return;
-    const coords = history.map((p) => [p.lat, p.lon] as [number, number]);
-    const trail = L.polyline(coords, { color: "#f97316", weight: 2, opacity: 0.8 }).addTo(map);
-    trailLines.set(mac, trail);
+    if (history.length >= 2) {
+      const coords = history.map((p) => [p.lat, p.lon] as [number, number]);
+      const trail = L.polyline(coords, { color: "#f97316", weight: 2, opacity: 0.8 }).addTo(map);
+      trailLines.set(mac, trail);
+    }
+
+    // Open device panel
+    const pos = deviceData.get(mac);
+    if (!pos) return;
+    openDevicePanel(pos);
   }
 
   function handleLiveEvent(data: unknown) {
@@ -190,6 +218,7 @@
   function openPanel(node: NodeResponse) {
     if (node.lat == null || node.lon == null) return;
     if (selectedNode) runCleanup({ restorePosition: true });
+    if (selectedDevice) closeDevicePanel();
 
     selectedNode = node;
     editName = node.name ?? "";
@@ -405,6 +434,75 @@
     }
   }
 
+  // ── Device edit panel ──────────────────────────────────────────────────────
+  function openDevicePanel(pos: PositionResponse) {
+    if (selectedDevice) closeDevicePanel();
+
+    selectedDevice = pos;
+    editDeviceLabel = pos.label ?? "";
+    editDeviceTag = pos.tag;
+    deviceSaveError = null;
+
+    deviceEscapeHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeDevicePanel();
+    };
+    document.addEventListener("keydown", deviceEscapeHandler);
+
+    requestAnimationFrame(repositionDevicePanel);
+  }
+
+  function closeDevicePanel() {
+    if (deviceEscapeHandler) {
+      document.removeEventListener("keydown", deviceEscapeHandler);
+      deviceEscapeHandler = null;
+    }
+    selectedDevice = null;
+    deviceSaveError = null;
+  }
+
+  function repositionDevicePanel() {
+    if (!map || !selectedDevice || !devicePanelEl) return;
+    const marker = deviceMarkers.get(selectedDevice.mac);
+    if (!marker) return;
+    const pt = map.latLngToContainerPoint(marker.getLatLng());
+    const h = devicePanelEl.offsetHeight || 160;
+    devicePanelEl.style.left = `${pt.x}px`;
+    devicePanelEl.style.top = `${pt.y - h - 12}px`;
+    devicePanelEl.style.transform = "translateX(-50%)";
+  }
+
+  async function handleDeviceSave() {
+    if (!selectedDevice) return;
+    deviceSaving = true;
+    deviceSaveError = null;
+    try {
+      const label = editDeviceLabel.trim();
+      const mac = selectedDevice.mac;
+
+      await Promise.all([
+        setDeviceLabel(mac, label),
+        editDeviceTag !== selectedDevice.tag ? setDeviceTag(mac, editDeviceTag) : Promise.resolve(),
+      ]);
+
+      // Update local state and marker appearance
+      const updated: PositionResponse = { ...selectedDevice, label: label || null, tag: editDeviceTag };
+      deviceData.set(mac, updated);
+
+      const marker = deviceMarkers.get(mac);
+      if (marker) {
+        const color = TAG_COLORS[editDeviceTag] ?? TAG_COLORS.unknown;
+        marker.setStyle({ color, fillColor: color });
+        marker.getTooltip()?.setContent(label || mac);
+      }
+
+      closeDevicePanel();
+    } catch (e) {
+      deviceSaveError = e instanceof Error ? e.message : "Save failed";
+    } finally {
+      deviceSaving = false;
+    }
+  }
+
   // ── Lifecycle ───────────────────────────────────────────────────────────────
   onMount(async () => {
     await initMap();
@@ -420,6 +518,7 @@
     ws?.close();
     map?.remove();
     if (escapeHandler) document.removeEventListener("keydown", escapeHandler);
+    if (deviceEscapeHandler) document.removeEventListener("keydown", deviceEscapeHandler);
     if (placementClickHandler && map) map.off("click", placementClickHandler);
   });
 </script>
@@ -541,6 +640,74 @@
             class="flex-1 bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white rounded px-3 py-1.5 text-xs"
             onclick={handleSave}
           >{saving ? "Saving…" : "Save"}</button>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Floating device edit panel -->
+    {#if selectedDevice}
+      <div
+        bind:this={devicePanelEl}
+        class="absolute z-[1000] w-64 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-3 text-sm"
+        style="pointer-events:auto"
+      >
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-mono text-xs text-zinc-400">{selectedDevice.mac}</span>
+          <button
+            class="text-zinc-500 hover:text-zinc-200 text-base leading-none"
+            onclick={closeDevicePanel}
+          >×</button>
+        </div>
+
+        <!-- Info -->
+        <div class="flex gap-3 mb-3 text-xs text-zinc-500">
+          {#if selectedDevice.vendor}
+            <span>{selectedDevice.vendor}</span>
+          {/if}
+          <span>{selectedDevice.device_type}</span>
+        </div>
+
+        <!-- Label -->
+        <label class="block mb-3">
+          <span class="text-zinc-400 text-xs">Label</span>
+          <input
+            type="text"
+            maxlength="100"
+            placeholder={selectedDevice.mac}
+            bind:value={editDeviceLabel}
+            class="mt-0.5 w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-zinc-100 text-sm focus:outline-none focus:border-zinc-400"
+          />
+        </label>
+
+        <!-- Tag -->
+        <label class="block mb-3">
+          <span class="text-zinc-400 text-xs">Tag</span>
+          <select
+            bind:value={editDeviceTag}
+            class="mt-0.5 w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-zinc-100 text-sm focus:outline-none focus:border-zinc-400"
+          >
+            {#each TAGS as tag}
+              <option value={tag}>{tag.replace("_", " ")}</option>
+            {/each}
+          </select>
+        </label>
+
+        {#if deviceSaveError}
+          <p class="text-red-400 text-xs mb-2">{deviceSaveError}</p>
+        {/if}
+
+        <!-- Actions -->
+        <div class="flex gap-2">
+          <button
+            class="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded px-3 py-1.5 text-xs"
+            onclick={closeDevicePanel}
+          >Cancel</button>
+          <button
+            disabled={deviceSaving}
+            class="flex-1 bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white rounded px-3 py-1.5 text-xs"
+            onclick={handleDeviceSave}
+          >{deviceSaving ? "Saving…" : "Save"}</button>
         </div>
       </div>
     {/if}
