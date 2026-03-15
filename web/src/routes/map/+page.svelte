@@ -67,9 +67,14 @@
     const L = await import("leaflet");
     return L.divIcon({
       className: "",
-      html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid rgba(0,0,0,0.3);box-sizing:border-box;"></div>`,
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
+      html: `<svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M14 2 L14 22" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+        <path d="M7 8 L14 4 L21 8" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 14 L14 8 L24 14" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="14" cy="24" r="3" fill="${color}"/>
+      </svg>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 28],
     });
   }
 
@@ -121,7 +126,7 @@
       const label = node.name ?? node.node_id;
 
       const marker = L.marker([node.lat, node.lon], { icon })
-        .bindTooltip(label, { permanent: false })
+        .bindTooltip(label, { permanent: true, direction: "bottom", offset: [0, 0], className: "node-label" })
         .addTo(map!);
 
       marker.on("click", () => openPanel(nodeData.get(node.node_id) ?? node));
@@ -343,7 +348,7 @@
         const L = await import("leaflet");
         const icon = await makeNodeIcon("#facc15");
         const marker = L.marker([e.latlng.lat, e.latlng.lng], { icon })
-          .bindTooltip(node.name ?? node.node_id, { permanent: false })
+          .bindTooltip(node.name ?? node.node_id, { permanent: true, direction: "bottom", offset: [0, 0], className: "node-label" })
           .addTo(map!);
         marker.on("click", () => {
           const n = nodeData.get(node.node_id);
@@ -567,3 +572,19 @@
     {/if}
   </div>
 </div>
+
+<style>
+  :global(.node-label) {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+    color: #e4e4e7;
+    padding: 0 !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  }
+  :global(.node-label::before) {
+    display: none !important;
+  }
+</style>
