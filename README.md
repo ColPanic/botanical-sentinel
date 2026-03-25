@@ -6,7 +6,7 @@ ESP32 nodes passively scan for WiFi and Bluetooth devices, learn the local RF
 environment, and alert on unknown devices. A home server aggregates data and serves a
 web UI for device tagging and management.
 
-## Hardware (Basically all the various old boards I have laying around the house. Adding more as I build. Please add more!
+## Hardware (Basically all the various old boards & whatnot I have laying around the house. Adding more as I build. Please add more!)
 
 | Node | Board | Role | Status |
 |------|-------|------|--------|
