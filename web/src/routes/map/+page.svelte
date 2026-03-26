@@ -165,9 +165,23 @@
 
   async function loadPositions() {
     const positions = await fetchActivePositions(windowMinutes);
+    const activeMacs = new Set<string>();
+
     for (const pos of positions) {
-      if (pos.tag === "ignored" && !showIgnored) continue;
+      if (pos.tag === "ignored" && !showIgnored) {
+        removeDeviceMarker(pos.mac);
+        deviceData.set(pos.mac, pos);
+        continue;
+      }
+      activeMacs.add(pos.mac);
       updateDeviceMarker(pos);
+    }
+
+    // Remove markers for devices no longer in the active window
+    for (const mac of deviceMarkers.keys()) {
+      if (!activeMacs.has(mac)) {
+        removeDeviceMarker(mac);
+      }
     }
   }
 
@@ -179,7 +193,9 @@
     deviceData.set(pos.mac, pos);
 
     if (deviceMarkers.has(pos.mac)) {
-      deviceMarkers.get(pos.mac)!.setLatLng([pos.lat, pos.lon]);
+      const existing = deviceMarkers.get(pos.mac)!;
+      existing.setLatLng([pos.lat, pos.lon]);
+      existing.setStyle({ color, fillColor: color, radius });
     } else {
       const marker = L.circleMarker([pos.lat, pos.lon], {
         radius,
@@ -193,6 +209,20 @@
       marker.on("click", (e: LeafletMouseEvent) => handleDeviceClick(e, pos.mac));
       deviceMarkers.set(pos.mac, marker);
     }
+  }
+
+  function removeDeviceMarker(mac: string) {
+    const marker = deviceMarkers.get(mac);
+    if (marker) {
+      marker.remove();
+      deviceMarkers.delete(mac);
+    }
+    const trail = trailLines.get(mac);
+    if (trail) {
+      trail.remove();
+      trailLines.delete(mac);
+    }
+    bulkSelected.delete(mac);
   }
 
   function handleDeviceClick(e: LeafletMouseEvent, mac: string) {
@@ -386,10 +416,23 @@
   }
 
   function handleLiveEvent(data: unknown) {
-    const event = data as { type?: string } & PositionResponse;
+    const event = data as { type?: string } & Partial<PositionResponse> & { mac: string; lat: number; lon: number };
     if (event.type !== "position_update") return;
-    if (event.tag === "ignored" && !showIgnored) return;
-    updateDeviceMarker(event);
+
+    // WebSocket events don't include tag/label — preserve from cached data
+    const cached = deviceData.get(event.mac);
+    const merged: PositionResponse = {
+      ...(cached ?? { time: "", accuracy_m: null, node_count: 0, method: "", label: null, tag: "unknown", vendor: null, device_type: "unknown" }),
+      ...event,
+      tag: cached?.tag ?? event.tag ?? "unknown",
+      label: cached?.label ?? event.label ?? null,
+    };
+
+    if (merged.tag === "ignored" && !showIgnored) {
+      removeDeviceMarker(merged.mac);
+      return;
+    }
+    updateDeviceMarker(merged);
   }
 
   // ── Edit panel ──────────────────────────────────────────────────────────────
