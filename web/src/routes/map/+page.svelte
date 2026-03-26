@@ -46,6 +46,11 @@
   let bulkApplying = false;
   let bulkError: string | null = null;
 
+  // ── Box-select (Ctrl+drag) state ──────────────────────────────────────────
+  let boxSelectOrigin: { x: number; y: number } | null = null;
+  let boxSelectCurrent: { x: number; y: number } | null = null;
+  let boxSelectEl: HTMLDivElement | undefined;
+
   // ── Device edit panel state ────────────────────────────────────────────────
   let devicePanelEl: HTMLDivElement | undefined;
   let selectedDevice: PositionResponse | null = null;
@@ -122,6 +127,7 @@
     }
 
     map.on("move zoom", () => { repositionPanel(); repositionDevicePanel(); });
+    initBoxSelect();
   }
 
   async function loadNodes() {
@@ -159,9 +165,23 @@
 
   async function loadPositions() {
     const positions = await fetchActivePositions(windowMinutes);
+    const activeMacs = new Set<string>();
+
     for (const pos of positions) {
-      if (pos.tag === "ignored" && !showIgnored) continue;
+      if (pos.tag === "ignored" && !showIgnored) {
+        removeDeviceMarker(pos.mac);
+        deviceData.set(pos.mac, pos);
+        continue;
+      }
+      activeMacs.add(pos.mac);
       updateDeviceMarker(pos);
+    }
+
+    // Remove markers for devices no longer in the active window
+    for (const mac of deviceMarkers.keys()) {
+      if (!activeMacs.has(mac)) {
+        removeDeviceMarker(mac);
+      }
     }
   }
 
@@ -173,7 +193,9 @@
     deviceData.set(pos.mac, pos);
 
     if (deviceMarkers.has(pos.mac)) {
-      deviceMarkers.get(pos.mac)!.setLatLng([pos.lat, pos.lon]);
+      const existing = deviceMarkers.get(pos.mac)!;
+      existing.setLatLng([pos.lat, pos.lon]);
+      existing.setStyle({ color, fillColor: color, radius });
     } else {
       const marker = L.circleMarker([pos.lat, pos.lon], {
         radius,
@@ -189,8 +211,22 @@
     }
   }
 
+  function removeDeviceMarker(mac: string) {
+    const marker = deviceMarkers.get(mac);
+    if (marker) {
+      marker.remove();
+      deviceMarkers.delete(mac);
+    }
+    const trail = trailLines.get(mac);
+    if (trail) {
+      trail.remove();
+      trailLines.delete(mac);
+    }
+    bulkSelected.delete(mac);
+  }
+
   function handleDeviceClick(e: LeafletMouseEvent, mac: string) {
-    if (e.originalEvent.shiftKey) {
+    if (e.originalEvent.shiftKey || e.originalEvent.ctrlKey || e.originalEvent.metaKey) {
       toggleBulkSelect(mac);
       return;
     }
@@ -219,6 +255,90 @@
     bulkLabel = "";
     bulkError = null;
     updateBulkHighlights();
+  }
+
+  function initBoxSelect() {
+    if (!map) return;
+    const container = map.getContainer();
+
+    container.addEventListener("mousedown", onBoxMouseDown);
+    container.addEventListener("mousemove", onBoxMouseMove);
+    container.addEventListener("mouseup", onBoxMouseUp);
+  }
+
+  function destroyBoxSelect() {
+    if (!map) return;
+    const container = map.getContainer();
+    container.removeEventListener("mousedown", onBoxMouseDown);
+    container.removeEventListener("mousemove", onBoxMouseMove);
+    container.removeEventListener("mouseup", onBoxMouseUp);
+  }
+
+  function onBoxMouseDown(e: MouseEvent) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    if (!map) return;
+    e.preventDefault();
+    e.stopPropagation();
+    map.dragging.disable();
+
+    if (selectedDevice) closeDevicePanel();
+    if (selectedNode) runCleanup({ restorePosition: true });
+
+    const rect = map.getContainer().getBoundingClientRect();
+    boxSelectOrigin = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    boxSelectCurrent = { ...boxSelectOrigin };
+  }
+
+  function onBoxMouseMove(e: MouseEvent) {
+    if (!boxSelectOrigin) return;
+    e.preventDefault();
+    const rect = map!.getContainer().getBoundingClientRect();
+    boxSelectCurrent = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    updateBoxSelectRect();
+  }
+
+  function onBoxMouseUp(e: MouseEvent) {
+    if (!boxSelectOrigin || !boxSelectCurrent || !map) return;
+    e.preventDefault();
+    map.dragging.enable();
+
+    const minX = Math.min(boxSelectOrigin.x, boxSelectCurrent.x);
+    const maxX = Math.max(boxSelectOrigin.x, boxSelectCurrent.x);
+    const minY = Math.min(boxSelectOrigin.y, boxSelectCurrent.y);
+    const maxY = Math.max(boxSelectOrigin.y, boxSelectCurrent.y);
+
+    // Only select if the rectangle is at least 5px in both dimensions
+    if (maxX - minX > 5 && maxY - minY > 5) {
+      for (const [mac, marker] of deviceMarkers) {
+        const pt = map.latLngToContainerPoint(marker.getLatLng());
+        if (pt.x >= minX && pt.x <= maxX && pt.y >= minY && pt.y <= maxY) {
+          bulkSelected.add(mac);
+        }
+      }
+      bulkSelected = bulkSelected; // trigger reactivity
+      updateBulkHighlights();
+    }
+
+    boxSelectOrigin = null;
+    boxSelectCurrent = null;
+    updateBoxSelectRect();
+  }
+
+  function updateBoxSelectRect() {
+    if (!boxSelectEl) return;
+    if (!boxSelectOrigin || !boxSelectCurrent) {
+      boxSelectEl.style.display = "none";
+      return;
+    }
+    const x = Math.min(boxSelectOrigin.x, boxSelectCurrent.x);
+    const y = Math.min(boxSelectOrigin.y, boxSelectCurrent.y);
+    const w = Math.abs(boxSelectCurrent.x - boxSelectOrigin.x);
+    const h = Math.abs(boxSelectCurrent.y - boxSelectOrigin.y);
+    boxSelectEl.style.display = "block";
+    boxSelectEl.style.left = `${x}px`;
+    boxSelectEl.style.top = `${y}px`;
+    boxSelectEl.style.width = `${w}px`;
+    boxSelectEl.style.height = `${h}px`;
   }
 
   function updateBulkHighlights() {
@@ -296,10 +416,23 @@
   }
 
   function handleLiveEvent(data: unknown) {
-    const event = data as { type?: string } & PositionResponse;
+    const event = data as { type?: string } & Partial<PositionResponse> & { mac: string; lat: number; lon: number };
     if (event.type !== "position_update") return;
-    if (event.tag === "ignored" && !showIgnored) return;
-    updateDeviceMarker(event);
+
+    // WebSocket events don't include tag/label — preserve from cached data
+    const cached = deviceData.get(event.mac);
+    const merged: PositionResponse = {
+      ...(cached ?? { time: "", accuracy_m: null, node_count: 0, method: "", label: null, tag: "unknown", vendor: null, device_type: "unknown" }),
+      ...event,
+      tag: cached?.tag ?? event.tag ?? "unknown",
+      label: cached?.label ?? event.label ?? null,
+    };
+
+    if (merged.tag === "ignored" && !showIgnored) {
+      removeDeviceMarker(merged.mac);
+      return;
+    }
+    updateDeviceMarker(merged);
   }
 
   // ── Edit panel ──────────────────────────────────────────────────────────────
@@ -603,6 +736,7 @@
   $: visibleUnlocatedNodes = unlocatedNodes.filter((n) => n.node_id !== selectedNode?.node_id);
 
   onDestroy(() => {
+    destroyBoxSelect();
     ws?.close();
     map?.remove();
     if (escapeHandler) document.removeEventListener("keydown", escapeHandler);
@@ -649,6 +783,13 @@
   <!-- Map container (position:relative so the panel can be absolute inside it) -->
   <div class="relative flex-1 z-0">
     <div bind:this={mapEl} class="w-full h-full"></div>
+
+    <!-- Box-select rectangle overlay -->
+    <div
+      bind:this={boxSelectEl}
+      class="absolute z-[999] border-2 border-blue-400 bg-blue-400/15 pointer-events-none"
+      style="display:none"
+    ></div>
 
     <!-- Floating edit panel -->
     {#if selectedNode}

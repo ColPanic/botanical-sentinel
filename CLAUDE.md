@@ -82,5 +82,5 @@ Schema applied automatically from `sql/init.sql` on first TimescaleDB start.
 - [x] TTGO T-Beam node (WiFi+BLE+GPS, MQTT publish)
 - [x] Server stack (Mosquitto, TimescaleDB, mqtt_bridge, FastAPI, SvelteKit)
 - [x] Web dashboard (nodes, devices, scan, map with live WebSocket)
-- [ ] ESP32-S3 TFT display regression (tracked: esp_bot-i60)
+- [x] ESP32-S3 TFT display (WiFi+BLE scan + TFT rendering)
 - [ ] LoRa uplink (waiting on hardware)
