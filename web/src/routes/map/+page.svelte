@@ -46,6 +46,11 @@
   let bulkApplying = false;
   let bulkError: string | null = null;
 
+  // ── Box-select (Ctrl+drag) state ──────────────────────────────────────────
+  let boxSelectOrigin: { x: number; y: number } | null = null;
+  let boxSelectCurrent: { x: number; y: number } | null = null;
+  let boxSelectEl: HTMLDivElement | undefined;
+
   // ── Device edit panel state ────────────────────────────────────────────────
   let devicePanelEl: HTMLDivElement | undefined;
   let selectedDevice: PositionResponse | null = null;
@@ -122,6 +127,7 @@
     }
 
     map.on("move zoom", () => { repositionPanel(); repositionDevicePanel(); });
+    initBoxSelect();
   }
 
   async function loadNodes() {
@@ -190,7 +196,7 @@
   }
 
   function handleDeviceClick(e: LeafletMouseEvent, mac: string) {
-    if (e.originalEvent.shiftKey) {
+    if (e.originalEvent.shiftKey || e.originalEvent.ctrlKey || e.originalEvent.metaKey) {
       toggleBulkSelect(mac);
       return;
     }
@@ -219,6 +225,90 @@
     bulkLabel = "";
     bulkError = null;
     updateBulkHighlights();
+  }
+
+  function initBoxSelect() {
+    if (!map) return;
+    const container = map.getContainer();
+
+    container.addEventListener("mousedown", onBoxMouseDown);
+    container.addEventListener("mousemove", onBoxMouseMove);
+    container.addEventListener("mouseup", onBoxMouseUp);
+  }
+
+  function destroyBoxSelect() {
+    if (!map) return;
+    const container = map.getContainer();
+    container.removeEventListener("mousedown", onBoxMouseDown);
+    container.removeEventListener("mousemove", onBoxMouseMove);
+    container.removeEventListener("mouseup", onBoxMouseUp);
+  }
+
+  function onBoxMouseDown(e: MouseEvent) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    if (!map) return;
+    e.preventDefault();
+    e.stopPropagation();
+    map.dragging.disable();
+
+    if (selectedDevice) closeDevicePanel();
+    if (selectedNode) runCleanup({ restorePosition: true });
+
+    const rect = map.getContainer().getBoundingClientRect();
+    boxSelectOrigin = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    boxSelectCurrent = { ...boxSelectOrigin };
+  }
+
+  function onBoxMouseMove(e: MouseEvent) {
+    if (!boxSelectOrigin) return;
+    e.preventDefault();
+    const rect = map!.getContainer().getBoundingClientRect();
+    boxSelectCurrent = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    updateBoxSelectRect();
+  }
+
+  function onBoxMouseUp(e: MouseEvent) {
+    if (!boxSelectOrigin || !boxSelectCurrent || !map) return;
+    e.preventDefault();
+    map.dragging.enable();
+
+    const minX = Math.min(boxSelectOrigin.x, boxSelectCurrent.x);
+    const maxX = Math.max(boxSelectOrigin.x, boxSelectCurrent.x);
+    const minY = Math.min(boxSelectOrigin.y, boxSelectCurrent.y);
+    const maxY = Math.max(boxSelectOrigin.y, boxSelectCurrent.y);
+
+    // Only select if the rectangle is at least 5px in both dimensions
+    if (maxX - minX > 5 && maxY - minY > 5) {
+      for (const [mac, marker] of deviceMarkers) {
+        const pt = map.latLngToContainerPoint(marker.getLatLng());
+        if (pt.x >= minX && pt.x <= maxX && pt.y >= minY && pt.y <= maxY) {
+          bulkSelected.add(mac);
+        }
+      }
+      bulkSelected = bulkSelected; // trigger reactivity
+      updateBulkHighlights();
+    }
+
+    boxSelectOrigin = null;
+    boxSelectCurrent = null;
+    updateBoxSelectRect();
+  }
+
+  function updateBoxSelectRect() {
+    if (!boxSelectEl) return;
+    if (!boxSelectOrigin || !boxSelectCurrent) {
+      boxSelectEl.style.display = "none";
+      return;
+    }
+    const x = Math.min(boxSelectOrigin.x, boxSelectCurrent.x);
+    const y = Math.min(boxSelectOrigin.y, boxSelectCurrent.y);
+    const w = Math.abs(boxSelectCurrent.x - boxSelectOrigin.x);
+    const h = Math.abs(boxSelectCurrent.y - boxSelectOrigin.y);
+    boxSelectEl.style.display = "block";
+    boxSelectEl.style.left = `${x}px`;
+    boxSelectEl.style.top = `${y}px`;
+    boxSelectEl.style.width = `${w}px`;
+    boxSelectEl.style.height = `${h}px`;
   }
 
   function updateBulkHighlights() {
@@ -603,6 +693,7 @@
   $: visibleUnlocatedNodes = unlocatedNodes.filter((n) => n.node_id !== selectedNode?.node_id);
 
   onDestroy(() => {
+    destroyBoxSelect();
     ws?.close();
     map?.remove();
     if (escapeHandler) document.removeEventListener("keydown", escapeHandler);
@@ -649,6 +740,13 @@
   <!-- Map container (position:relative so the panel can be absolute inside it) -->
   <div class="relative flex-1 z-0">
     <div bind:this={mapEl} class="w-full h-full"></div>
+
+    <!-- Box-select rectangle overlay -->
+    <div
+      bind:this={boxSelectEl}
+      class="absolute z-[999] border-2 border-blue-400 bg-blue-400/15 pointer-events-none"
+      style="display:none"
+    ></div>
 
     <!-- Floating edit panel -->
     {#if selectedNode}
